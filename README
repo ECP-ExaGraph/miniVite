@@ -1,0 +1,135 @@
+************************
+miniVite (/mini/ˈviːte/)
+
+Version: 1.0
+************************
+
+*******
+-------
+ ABOUT
+-------
+*******
+miniVite is a proxy app that implements a single phase of Louvain 
+method in distributed memory for graph community detection. Please 
+refer to the following paper for a detailed discussion on
+distributed memory Louvain method implementation:
+https://ieeexplore.ieee.org/abstract/document/8425242/
+
+Apart from real world graphs, users can use specific options 
+to generate a Random Geometric Graph (RGG) in parallel.
+RGGs have been known to have good community structure:
+https://arxiv.org/pdf/1604.03993.pdf
+
+The way we have implemented a parallel RGG generator, vertices 
+owned by a process will only have cross edges with its logical
+neighboring processes (each process owning 1x1/p chunk of the
+1x1 unit square). If MPI process mapping is such that consecutive 
+processes (for e.g., p and p+1) are physically close to each other, 
+then there is not much communication stress in the application. 
+Therefore, we allow an option to add extra edges between randomly 
+chosen vertices, whose owners may be physically far apart. 
+
+We require the total number of processes to be a power of 2 and 
+total number of vertices to be perfectly divisible by the number of 
+processes when parallel RGG generation options are used. 
+This constraint does not apply to real world graphs passed to miniVite.
+
+We also allow users to pass any real world graph as input. However,
+we expect an input graph to be in a certain binary format, which
+we have observed to be more efficient than reading ASCII format
+files. The code for binary conversion (from a variety of common
+graph formats) is packaged separately with Vite, which is our
+full implementation of Louvain method in distributed memory.
+Please follow instructions in Vite README for binary file 
+conversion.
+
+Vite could be downloaded from:
+http://hpc.pnl.gov/people/hala/grappolo.html
+
+Unlike Vite, we do not implement any heuristics to improve the
+performance of Louvain method. miniVite is a baseline parallel
+version, implementing only the first phase of Louvain method.
+
+This code requires an MPI library (preferably MPI-3 compatible) 
+and C++11 compliant compiler for building. 
+
+Please contact the following for any queries or support:
+
+Sayan Ghosh, WSU (zsayanz at gmail dot com)
+Mahantesh Halappanavar, PNNL (hala at pnnl dot gov)
+
+*************
+-------------
+ COMPILATION
+-------------
+*************
+Please update the Makefile with compiler flags and use a C++11 compliant 
+compiler of your choice. Invoke `make clean; make` after setting paths 
+to MPI for generating the binary. Use `mpirun` or `mpiexec` or `srun`
+to execute the code with specific runtime arguments mentioned in the
+next section.
+
+Pass -DDEBUG_PRINTF if detailed diagonostics is required along
+program run. This program requires OpenMP and C++11 support,
+so pass -fopenmp (for g++)/-qopenmp (for icpc) and -std=c++11/
+-std=c++0x.
+
+Pass -DUSE_32_BIT_GRAPH if number of nodes in the graph are 
+within 32-bit range (2 x 10^9), else 64-bit range is assumed.
+
+Pass -DOMP_SCHEDULE_RUNTIME if you want to set OMP_SCHEDULE
+for all parallel regions at runtime. If -DOMP_SCHEDULE_RUNTIME 
+is passed, and OMP_SCHEDULE is not set, then the default schedule will
+be chosen (which is most probably "static" or "guided" for most of 
+the OpenMP regions).
+
+Communicating vertex-community information (per iteration) 
+is the most expensive step of our distributed Louvain 
+implementation. We use the one of the following MPI communication 
+primitives for communicating vertex-community during a Louvain
+iteration, that could be enabled by passing predefined
+macros at compile time:
+
+1. MPI Collectives:  -DUSE_MPI_COLLECTIVES
+2. MPI Send-Receive: -DUSE_MPI_SENDRECV
+3. MPI RMA:          -DUSE_MPI_RMA (using -DUSE_MPI_ACCUMULATE 
+                     additionally ensures atomic put) 
+4. Default:          Uses MPI point-to-point nonblocking API.
+
+Apart from these, we use MPI (blocking) collectives, mostly
+MPI_Alltoall.
+
+There are other predefined macros in the code as well for printing
+intermediate results or checking correctness or using a particular
+C++ data structure. 
+
+***********************
+-----------------------
+ EXECUTING THE PROGRAM
+-----------------------
+***********************
+
+E.g.: 
+mpiexec -n 2 bin/./minivite -f karate.bin
+mpiexec -n 2 bin/./minivite -l -n 100
+mpiexec -n 2 bin/./minivite -n 100
+mpiexec -n 2 bin/./minivite -p 2 -n 100
+
+Possible options (can be combined):
+
+1. -f <bin-file>   : Specify input binary file after this argument. 
+2. -n <vertices>   : Pass total number of vertices of the generated graph.
+3. -l              : Use distributed LCG for randomly choosing edges. If this option 
+                     is not used, we will use C++ random number generator (using 
+                     std::default_random_engine).
+4. -p <percent>    : Specify percent of overall edges to be randomly generated between
+                     processes.
+5. -t <threshold>  : Specify threshold quantity (default: 1.0E-06) used to determine the 
+                     exit criteria in an iteration of Louvain method.
+6. -w              : Use Euclidean distance as edge weight. If this option is not used,
+                     edge weights are considered as 1.0. Generate edge weight uniformly 
+                     between (0,1) if Euclidean distance is not available (applicable to 
+                     randomly generated edges).                    
+7. -r <nranks>     : This is used to control the number of aggregators in MPI I/O and is
+                     meaningful when an input binary graph file is passed with option "-f".
+                     naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
