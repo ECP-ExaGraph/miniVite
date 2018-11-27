@@ -34,7 +34,7 @@ set( CMAKE_CXX_STANDARD 11 )
 #set(CMAKE_CXX_COMPILER "/share/apps/gcc/7.1/bin/g++")
 
 #set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fopenmp -O3" )
-set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++11 -fopenmp -O0" )
+set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++11 -fopenmp -O0 -DCHECK_NUM_EDGES -DPRINT_EXTRA_NEDGES" )
 
 find_package(OpenMP)
 if (OPENMP_FOUND)
