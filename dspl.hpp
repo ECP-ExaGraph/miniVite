@@ -627,6 +627,7 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
   // fetch baseptr from MPI window
 #if defined(USE_MPI_RMA)
   MPI_Win_flush_all(commwin);
+  MPI_Barrier(gcomm);
 
   GraphElem *rcbuf = nullptr;
   int flag = 0;
