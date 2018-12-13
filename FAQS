@@ -90,7 +90,7 @@ Q4. Is there a shared-memory equivalent of Vite/miniVite?
 
 A4. Yes, Grappolo performs shared-memory community detection using Louvain 
 method. Apart from community detection, Grappolo has routines for matrix 
-reordering. 
+reordering as well. 
 
 [Code]
 
