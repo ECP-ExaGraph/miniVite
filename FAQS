@@ -1,0 +1,210 @@
+*****************
+* miniVite FAQs *
+*****************
+----------------------------------------------------
+FYI, typical "How to run" queries are addressed Q5
+onward.
+
+Please send your suggestions for improving this FAQ
+to zsayanz at gmail dot com OR hala at pnnl dot gov.
+----------------------------------------------------
+
+-------------------------------------------------------------------------
+Q1. What is graph community detection?
+-------------------------------------------------------------------------
+
+A1. In most real-world graphs/networks, the nodes/vertices tend to be 
+organized into tightly-knit modules known as communities or clusters,
+such that nodes within a community are more likely to be "related" to 
+one another than they are to the rest of the network. The goodness of 
+partitioning into communities is typically measured using a metric 
+called modularity. Community detection is the method of identifying 
+these clusters or communities in graphs.
+
+[References]
+
+Fortunato, Santo. "Community detection in graphs." Physics reports 
+486.3-5 (2010): 75-174. https://arxiv.org/pdf/0906.0612.pdf
+
+--------------------------------------------------------------------------
+Q2. What is miniVite? 
+--------------------------------------------------------------------------
+
+A2. miniVite is a distributed-memory code (or mini application) that 
+performs partial graph community detection using the Louvain method. 
+Louvain method is a multi-phase, iterative heuristic that performs 
+modularity optimization for graph community detection. miniVite only 
+performs the first phase of Louvain method.
+
+[Code]
+https://github.com/Exa-Graph/miniVite
+http://hpc.pnl.gov/people/hala/grappolo.html
+
+[References]
+
+Blondel, Vincent D., et al. "Fast unfolding of communities in large 
+networks." Journal of statistical mechanics: theory and experiment 
+2008.10 (2008): P10008.
+
+Ghosh S, Halappanavar M, Tumeo A, Kalyanaraman A, Gebremedhin AH. 
+miniVite: A Graph Analytics Benchmarking Tool for Massively Parallel 
+Systems.
+
+---------------------------------------------------------------------------
+Q3. What is the parent application of miniVite? How are they different?
+---------------------------------------------------------------------------
+
+A3. miniVite is derived from Vite, which implements the multi-phase 
+Louvain method. Apart from a parallel baseline version, Vite provides 
+a number of heuristics (such as early termination, threshold cycling and 
+incomplete coloring) that can improve the scalability and quality of 
+community detection. In contrast, miniVite just provides a parallel 
+baseline version, and, has option to select different MPI communication 
+methods (such as send/recv, collectives and RMA) for one of the most 
+communication intensive portions of the code. miniVite also includes an 
+in-memory random geometric graph generator, making it convenient for 
+users to run miniVite without any external files. Vite can also convert 
+graphs from different native formats (like matrix market, SNAP, edge 
+list, DIMACS, etc) to the binary format that both Vite and miniVite 
+requires.
+
+[Code]
+
+http://hpc.pnl.gov/people/hala/grappolo.html
+
+[References]
+
+Ghosh S, Halappanavar M, Tumeo A, Kalyanaraman A, Lu H, Chavarria-Miranda D, 
+Khan A, Gebremedhin A. Distributed louvain algorithm for graph community 
+detection. In 2018 IEEE International Parallel and Distributed Processing 
+Symposium (IPDPS) 2018 May 21 (pp. 885-895). IEEE.
+
+Ghosh S, Halappanavar M, Tumeo A, Kalyanaraman A, Gebremedhin AH. 
+Scalable Distributed Memory Community Detection Using Vite. 
+In 2018 IEEE High Performance extreme Computing Conference (HPEC) 2018 
+Sep 25 (pp. 1-7). IEEE.
+
+-----------------------------------------------------------------------------
+Q4. Is there a shared-memory equivalent of Vite/miniVite?
+-----------------------------------------------------------------------------
+
+A4. Yes, Grappolo performs shared-memory community detection using Louvain 
+method. Apart from community detection, Grappolo has routines for matrix 
+reordering. 
+
+[Code]
+
+http://hpc.pnl.gov/people/hala/grappolo.html
+
+[References]
+
+Lu H, Halappanavar M, Kalyanaraman A. Parallel heuristics for scalable 
+community detection. Parallel Computing. 2015 Aug 1;47:19-37.
+
+Halappanavar M, Lu H, Kalyanaraman A, Tumeo A. Scalable static and dynamic 
+community detection using grappolo. In High Performance Extreme Computing 
+Conference (HPEC), 2017 IEEE 2017 Sep 12 (pp. 1-6). IEEE.
+
+------------------------------------------------------------------------------
+Q5. How does one perform strong scaling analysis using miniVite? How to 
+determine 'good' candidates (input graphs) that can be used for strong 
+scaling runs? How much time is approximately spent in performing I/O?
+------------------------------------------------------------------------------
+
+A5. Use a large graph as an input, preferably over a billion edges. Not all 
+large graphs have a good community structure. You should be able to identify 
+one that serves your purpose, hopefully after few trials. Graphs can be 
+obtained various websites serving as repositories, such as Sparse TAMU 
+collection[1], SNAP repository[2] and MIT Graph Challenge website[3], to name 
+a few of the prominent ones. You can convert graphs from their native format to 
+the binary format that miniVite requires, using the converters in Vite (please 
+see README). If your graph is in Webgraph[4] format, you can easily convert it 
+to an edge list first (example code snippet below), before passing it on to Vite 
+for subsequent binary conversion.
+
+#include "offline_edge_iterator.hpp"
+...
+using namespace webgraph::ascii_graph;
+
+// read in input/output file 
+std::ofstream ofile(argv[2]);
+offline_edge_iterator itor(argv[1]), end;
+
+// read edges
+while( itor != end ) {
+    ofile << itor->first << " " << itor->second << std::endl;
+    ++itor;
+}
+ofile.close();
+...
+
+Due to its simple vertex-based distribution, miniVite takes about 2-4s to read a 55GB 
+binary file if you use Burst buffer (Cray DataWarp) or Lustre striping (about 25 OSTs, 
+default 1M blocks). Hence, the overall I/O time that we have observed in most cases is 
+within 1/2% of the overall execution time.
+
+[1] https://sparse.tamu.edu/
+[2] http://snap.stanford.edu/data
+[3] http://graphchallenge.mit.edu/data-sets
+[4] http://webgraph.di.unimi.it/
+
+-----------------------------------------------------------------------------------
+Q6. How does one perform weak scaling analysis using miniVite? How does one scale
+the graphs with processes?
+-----------------------------------------------------------------------------------
+
+A6. miniVite has an in-memory random geometric graph generator (please see
+README) that can be used for weak-scaling analysis. An n-D random geometric graph 
+(RGG), is generated by randomly placing N vertices in an n-D space and connecting 
+pairs of vertices whose Euclidean distance is less than or equal to d. We only 
+consider 2D RGGs contained within a unit square, [0,1]^2. We distribute the domain 
+such that each process receives N/p vertices (where p is the total 
+number of processes). 
+
+Each process owns (1 * 1/p) portion of the unit square and d is computed as (please 
+refer to Section 4 of miniVite paper for details): 
+
+d = (dc + dt)/2;
+where, dc = sqrt(ln(N) / pi*N); dt = sqrt(2.0736 / pi*N)
+
+Therefore, the number of vertices (N) passed during miniVite execution on p
+processes must satisfy the condition -- 1/p > d.
+
+Please note, the default distribution of graph generated from the in-built random 
+geometric graph generator causes a process to only communicate with its two 
+immediate neighbors. If you want to increase the communication intensity for 
+generated graphs, please use the "-p" option to specify an extra percentage of edges 
+that will be generated, linking random vertices. As a side-effect, this option 
+significantly increases the time required to generate the graph.
+
+------------------------------------------------------------------------------
+Q7. Does Vite (the parent application to miniVite) have an in-built graph 
+generator?
+------------------------------------------------------------------------------
+
+A7. At present, Vite does not have an in-built graph generator that we have in 
+miniVite, so we rely on users providing external graphs for Vite (strong/weak 
+scaling) analysis. However, Vite has bindings to NetworKit[5], and users can use 
+those bindings to generate graphs of their choice from Vite (refer to the 
+README). Generating large graphs in this manner can take a lot of time, since 
+there are intermediate copies and the graph generators themselves may be serial 
+or may use threads on a shared-memory system. We do not plan on supporting the 
+NetworKit bindings in future.
+
+[5] https://networkit.github.io/
+
+------------------------------------------------------------------------------
+Q8. Does providing a larger input graph translate to comparatively larger 
+execution times? Is it possible to control the execution time for a particular
+graph?
+------------------------------------------------------------------------------
+
+A8. No. A relatively small graph can run for many iterations, as compared to
+a larger graph that runs for a few iterations to convergence. Since miniVite is 
+iterative, the final number of iterations to convergence (and hence, execution 
+time) depends on the structure of the graph. It is however possible to exit 
+early by passing a larger threshold (using the "-t <...>" option, the default 
+threshold or tolerance is 1.0E-06, a larger threshold can be passed, for e.g, 
+"-t 1.0E-03"), that should reduce the overall execution time for all graphs in 
+general (at least w.r.t miniVite, which only executes the first phase of Louvain 
+method).
