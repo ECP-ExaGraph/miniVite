@@ -229,7 +229,7 @@ Q10. What are the steps required for using real-world graphs as an input to
 miniVite?
 ------------------------------------------------------------------------------
 
-First, please download Vite (parent application of miniVite) from: 
+A10. First, please download Vite (parent application of miniVite) from: 
 http://hpc.pnl.gov/people/hala/grappolo.html
 
 Graphs/Sparse matrices come in several native formats (matrix market, SNAP, 
