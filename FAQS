@@ -218,8 +218,8 @@ graphs?
 A9. Yes, the "-p <percent>" option allows extra edges to be added between 
 random vertices (see README). This increases the overall communication, but 
 affects the structure of communities in the generated graph (lowers the 
-modularity). Therefore, adding some extra edges into the generated graph will 
-most probably reduce the global modularity and the number of iterations to 
-convergence. 
+modularity). Therefore, adding extra edges in the generated graph will 
+most probably reduce the global modularity, and the number of iterations to 
+convergence shall decrease. 
 The maximum number of edges that can be added is bounded by INT_MAX, at 
-present, data ranges more than INT_MAX is unsupported.
+present, we do not handle data ranges more than INT_MAX.
