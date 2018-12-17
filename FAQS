@@ -37,6 +37,7 @@ modularity optimization for graph community detection. miniVite only
 performs the first phase of Louvain method.
 
 [Code]
+
 https://github.com/Exa-Graph/miniVite
 http://hpc.pnl.gov/people/hala/grappolo.html
 
@@ -208,3 +209,17 @@ threshold or tolerance is 1.0E-06, a larger threshold can be passed, for e.g,
 "-t 1.0E-03"), that should reduce the overall execution time for all graphs in 
 general (at least w.r.t miniVite, which only executes the first phase of Louvain 
 method).
+
+------------------------------------------------------------------------------
+Q9. Is there an option to add some noise in the generated random geometric 
+graphs?
+------------------------------------------------------------------------------
+
+A9. Yes, the "-p <percent>" option allows extra edges to be added between 
+random vertices (see README). This increases the overall communication, but 
+affects the structure of communities in the generated graph (lowers the 
+modularity). Therefore, adding some extra edges into the generated graph will 
+most probably reduce the global modularity and the number of iterations to 
+convergence. 
+The maximum number of edges that can be added is bounded by INT_MAX, at 
+present, data ranges more than INT_MAX is unsupported.
