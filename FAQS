@@ -223,3 +223,29 @@ most probably reduce the global modularity, and the number of iterations to
 convergence shall decrease. 
 The maximum number of edges that can be added is bounded by INT_MAX, at 
 present, we do not handle data ranges more than INT_MAX.
+
+------------------------------------------------------------------------------
+Q10. What are the steps required for using real-world graphs as an input to
+miniVite?
+------------------------------------------------------------------------------
+
+First, please download Vite (parent application of miniVite) from: 
+http://hpc.pnl.gov/people/hala/grappolo.html
+
+Graphs/Sparse matrices come in several native formats (matrix market, SNAP, 
+DIMACS, etc.) Vite has several options to convert graphs from native to the 
+binary format that miniVite requires (please take a look at Vite README).
+
+As an example, you can download the Friendster file from: 
+https://sparse.tamu.edu/SNAP/com-Friendster
+The option to convert Friendster to binary using Vite's converter is as follows 
+(please note, this part is serial): 
+
+$VITE_BIN_PATH/bin/./fileConvertDist -f $INPUT_PATH/com-Friendster.mtx 
+    -m -o $OUTPUT_PATH/com-Friendster.bin
+
+After the conversion, you can run miniVite with the binary file obtained
+from the previous step:
+
+mpiexec -n <...> $MINIVITE_PATH/./dspl -r <processes-per-node> 
+    -f $FILE_PATH/com-Friendster.bin
