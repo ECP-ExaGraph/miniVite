@@ -242,7 +242,44 @@ class Graph
                         "}, which will overwhelm STDOUT." << std::endl;
             }
         }
-        
+       
+        // print statistics about edge distribution
+        void print_dist_stats()
+        {
+            GraphElem sumdeg = 0, maxdeg = 0;
+
+            MPI_Reduce(&lne_, &sumdeg, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+            MPI_Reduce(&lne_, &maxdeg, 1, MPI_GRAPH_TYPE, MPI_MAX, 0, comm_);
+
+            GraphElem my_sq = lne_*lne_;
+            GraphElem sum_sq = 0;
+            MPI_Reduce(&my_sq, &sum_sq, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+
+            GraphWeight average  = (GraphWeight) sumdeg / size_;
+            GraphWeight avg_sq   = (GraphWeight) sum_sq / size_;
+            GraphWeight var      = avg_sq - (average*average);
+            GraphWeight stddev   = sqrt(var);
+
+            MPI_Barrier(comm_);
+
+            if (rank_ == 0)
+            {
+                std::cout << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
+                std::cout << "Graph edge distribution characteristics" << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
+                std::cout << "Number of vertices: " << nv_ << std::endl;
+                std::cout << "Number of edges: " << ne_ << std::endl;
+                std::cout << "Maximum number of edges: " << maxdeg << std::endl;
+                std::cout << "Average number of edges: " << average << std::endl;
+                std::cout << "Expected value of X^2: " << avg_sq << std::endl;
+                std::cout << "Variance: " << var << std::endl;
+                std::cout << "Standard deviation: " << stddev << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
+
+            }
+        }
+
         // public variables
         std::vector<GraphElem> edge_indices_;
         std::vector<Edge> edge_list_;

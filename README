@@ -69,6 +69,9 @@ to MPI for generating the binary. Use `mpirun` or `mpiexec` or `srun`
 to execute the code with specific runtime arguments mentioned in the
 next section.
 
+Pass -DPRINT_DIST_STATS for printing distributed graph 
+characteristics.
+
 Pass -DDEBUG_PRINTF if detailed diagonostics is required along
 program run. This program requires OpenMP and C++11 support,
 so pass -fopenmp (for g++)/-qopenmp (for icpc) and -std=c++11/

@@ -96,12 +96,14 @@ int main(int argc, char *argv[])
       if (me == 0) {
           std::cout << "**********************************************************************" << std::endl;
           std::cout << "Generated Random Geometric Graph with d: " << gr.get_d() << std::endl;
+#ifndef PRINT_DIST_STATS
           const GraphElem nv = g->get_nv();
           const GraphElem ne = g->get_ne();
           std::cout << "Number of vertices: " << nv << std::endl;
           std::cout << "Number of edges: " << ne << std::endl;
+#endif
           //std::cout << "Sparsity: "<< (double)((double)nv / (double)(nvRGG*nvRGG))*100.0 <<"%"<< std::endl;
-          std::cout << "Average degree: " << (ne / nv) << std::endl;
+          //std::cout << "Average degree: " << (ne / nv) << std::endl;
       }
       
       MPI_Barrier(MPI_COMM_WORLD);
@@ -112,6 +114,9 @@ int main(int argc, char *argv[])
       //g->print();
   }
 
+#ifdef PRINT_DIST_STATS 
+  g->print_dist_stats();
+#endif
   assert(g != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);
