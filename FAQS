@@ -251,8 +251,8 @@ mpiexec -n <...> $MINIVITE_PATH/./dspl -r <processes-per-node>
     -f $FILE_PATH/com-Friendster.bin
 
 --------------------------------------------------------------------------------
-Q11. miniVite is scalable for a particular input graph, but not for another one 
-of the same size, why is that?
+Q11. miniVite is scalable for a particular input graph, but not for another 
+similar sized graph, why is that?
 --------------------------------------------------------------------------------
 
 A11. Presently, our distribution is vertex-based. That means a process owns N/p 
