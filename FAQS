@@ -249,3 +249,22 @@ from the previous step:
 
 mpiexec -n <...> $MINIVITE_PATH/./dspl -r <processes-per-node> 
     -f $FILE_PATH/com-Friendster.bin
+
+--------------------------------------------------------------------------------
+Q11. miniVite is scalable for a particular input graph, but not for another one 
+of the same size, why is that?
+--------------------------------------------------------------------------------
+
+A11. Presently, our distribution is vertex-based. That means a process owns N/p 
+vertices and all the edges connected to those N/p vertices (including ghost 
+vertices). Load imbalances are very probable in this type of distribution, 
+depending on the graph structure. 
+
+As an example, lets say there is a large (real-world) graph, and its structure 
+is such that only a few processes end up owning a majority of edges, as per 
+miniVite graph data distribution. Also, lets assume that the graph has either a 
+very poor community structure (modularity closer to 0) or very stable community 
+structure (modularity close to 1 after a few iterations, that means not many 
+vertices are migrating to neighboring communities). In both these cases, 
+community detection in miniVite will run for a relatively less number of 
+iterations, affecting the overall scalability across processes.
