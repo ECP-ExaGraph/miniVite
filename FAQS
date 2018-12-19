@@ -266,5 +266,5 @@ miniVite graph data distribution. Also, lets assume that the graph has either a
 very poor community structure (modularity closer to 0) or very stable community 
 structure (modularity close to 1 after a few iterations, that means not many 
 vertices are migrating to neighboring communities). In both these cases, 
-community detection in miniVite will run for a relatively less number of 
-iterations, affecting the overall scalability across processes.
+community detection in miniVite will run for relatively less number of 
+iterations, which may affect the overall scalability.
