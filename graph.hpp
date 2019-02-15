@@ -57,6 +57,12 @@
 
 unsigned seed;
 
+// for edge rebalancing
+#define TAKE_EDGES  (100)
+#define GIVE_EDGES  (101)
+#define EDGE_SIZES  (102)
+#define EDGE_DATA   (103)
+
 struct Edge
 {
     GraphElem tail_;
@@ -110,7 +116,7 @@ class Graph
             parts_[0] = 0;
 
             for (GraphElem i = 1; i < size_+1; i++)
-                parts_[i]=((nv_ * i) / size_);  
+                parts_[i] = ((nv_ * i) / size_);  
         }
 
         ~Graph() 
@@ -119,7 +125,11 @@ class Graph
             edge_indices_.clear();
             parts_.clear();
         }
-       
+         
+        // update vertex partition information
+        void repart(std::vector<GraphElem> const& parts)
+        { memcpy(parts_.data(), parts.data(), sizeof(GraphElem)*(size_+1)); }
+
         // TODO FIXME put asserts like the following
         // everywhere function member of Graph class
         void set_edge_index(GraphElem const vertex, GraphElem const e0)
@@ -242,7 +252,7 @@ class Graph
                         "}, which will overwhelm STDOUT." << std::endl;
             }
         }
-       
+                
         // print statistics about edge distribution
         void print_dist_stats()
         {
@@ -279,14 +289,13 @@ class Graph
 
             }
         }
-
+        
         // public variables
         std::vector<GraphElem> edge_indices_;
         std::vector<Edge> edge_list_;
     private:
         GraphElem lnv_, lne_, nv_, ne_;
-        std::vector<GraphElem> parts_;        
-        
+        std::vector<GraphElem> parts_;       
         MPI_Comm comm_; 
         int rank_, size_;
 };
@@ -306,9 +315,7 @@ class BinaryEdgeList
             M_local_(-1), N_local_(-1), 
             comm_(comm) 
         {}
-
-        // the input binary file will be sorted by
-        // vertices
+        
         // read a file and return a graph
         Graph* read(int me, int nprocs, int ranks_per_node, std::string file)
         {
@@ -408,6 +415,167 @@ class BinaryEdgeList
 
             return g;
         }
+
+        // find a distribution such that every 
+        // process own equal number of edges (serial)
+        void find_balanced_num_edges(int nprocs, std::string file, std::vector<GraphElem>& mbins)
+        {
+            FILE *fp;
+            GraphElem nv, ne; // #vertices, #edges
+            std::vector<GraphElem> nbins(nprocs,0);
+            
+            fp = fopen(file.c_str(), "rb");
+            if (fp == NULL) 
+            {
+                std::cout<< " Error opening file! " << std::endl;
+                return;
+            }
+
+            // read nv and ne
+            fread(&nv, sizeof(GraphElem), 1, fp);
+            fread(&ne, sizeof(GraphElem), 1, fp);
+          
+            // bin capacity
+            GraphElem nbcap = (ne / nprocs), ecount_idx, past_ecount_idx = 0;
+            int p = 0;
+
+            for (GraphElem m = 0; m < nv; m++)
+            {
+                fread(&ecount_idx, sizeof(GraphElem), 1, fp);
+               
+                // bins[p] >= capacity only for the last process
+                if ((nbins[p] < nbcap) || (p == (nprocs - 1)))
+                    nbins[p] += (ecount_idx - past_ecount_idx);
+
+                // increment p as long as p is not the last process
+                // worst case: excess edges piled up on (p-1)
+                if ((nbins[p] >= nbcap) && (p < (nprocs - 1)))
+                    p++;
+
+                mbins[p+1]++;
+                past_ecount_idx = ecount_idx;
+            }
+            
+            fclose(fp);
+
+            // prefix sum to store indices 
+            for (int k = 1; k < nprocs+1; k++)
+                mbins[k] += mbins[k-1]; 
+            
+            nbins.clear();
+        }
+        
+        // read a file and return a graph
+        // uses a balanced distribution
+        // (approximately equal #edges per process) 
+        Graph* read_balanced(int me, int nprocs, int ranks_per_node, std::string file)
+        {
+            int file_open_error;
+            MPI_File fh;
+            MPI_Status status;
+            std::vector<GraphElem> mbins(nprocs+1,0);
+
+            // find #vertices per process such that 
+            // each process roughly owns equal #edges
+            if (me == 0)
+            {
+                find_balanced_num_edges(nprocs, file, mbins);
+                std::cout << "Trying to achieve equal edge distribution across processes." << std::endl;
+            }
+            MPI_Barrier(comm_);
+            MPI_Bcast(mbins.data(), nprocs+1, MPI_GRAPH_TYPE, 0, comm_);
+
+            // specify the number of aggregates
+            MPI_Info info;
+            MPI_Info_create(&info);
+            int naggr = (ranks_per_node > 1) ? (nprocs/ranks_per_node) : ranks_per_node;
+            if (naggr >= nprocs)
+                naggr = 1;
+            std::stringstream tmp_str;
+            tmp_str << naggr;
+            std::string str = tmp_str.str();
+            MPI_Info_set(info, "cb_nodes", str.c_str());
+
+            file_open_error = MPI_File_open(comm_, file.c_str(), MPI_MODE_RDONLY, info, &fh); 
+            MPI_Info_free(&info);
+
+            if (file_open_error != MPI_SUCCESS) 
+            {
+                std::cout << " Error opening file! " << std::endl;
+                MPI_Abort(comm_, -99);
+            }
+
+            // read the dimensions 
+            MPI_File_read_all(fh, &M_, sizeof(GraphElem), MPI_BYTE, &status);
+            MPI_File_read_all(fh, &N_, sizeof(GraphElem), MPI_BYTE, &status);
+            M_local_ = mbins[me+1] - mbins[me];
+
+            // create local graph
+            Graph *g = new Graph(M_local_, 0, M_, N_);
+            // readjust parts with new vertex partition
+            g->repart(mbins);
+
+            uint64_t tot_bytes=(M_local_+1)*sizeof(GraphElem);
+            MPI_Offset offset = 2*sizeof(GraphElem) + mbins[me]*sizeof(GraphElem);
+
+            // read in INT_MAX increments if total byte size is > INT_MAX
+            if (tot_bytes < INT_MAX)
+                MPI_File_read_at(fh, offset, &g->edge_indices_[0], tot_bytes, MPI_BYTE, &status);
+            else 
+            {
+                int chunk_bytes=INT_MAX;
+                uint8_t *curr_pointer = (uint8_t*) &g->edge_indices_[0];
+                uint64_t transf_bytes = 0;
+
+                while (transf_bytes < tot_bytes)
+                {
+                    MPI_File_read_at(fh, offset, curr_pointer, chunk_bytes, MPI_BYTE, &status);
+                    transf_bytes += chunk_bytes;
+                    offset += chunk_bytes;
+                    curr_pointer += chunk_bytes;
+
+                    if ((tot_bytes - transf_bytes) < INT_MAX)
+                        chunk_bytes = tot_bytes - transf_bytes;
+                } 
+            }    
+
+            N_local_ = g->edge_indices_[M_local_] - g->edge_indices_[0];
+            g->set_nedges(N_local_);
+
+            tot_bytes = N_local_*(sizeof(Edge));
+            offset = 2*sizeof(GraphElem) + (M_+1)*sizeof(GraphElem) + g->edge_indices_[0]*(sizeof(Edge));
+
+            if (tot_bytes < INT_MAX)
+                MPI_File_read_at(fh, offset, &g->edge_list_[0], tot_bytes, MPI_BYTE, &status);
+            else 
+            {
+                int chunk_bytes=INT_MAX;
+                uint8_t *curr_pointer = (uint8_t*)&g->edge_list_[0];
+                uint64_t transf_bytes = 0;
+
+                while (transf_bytes < tot_bytes)
+                {
+                    MPI_File_read_at(fh, offset, curr_pointer, chunk_bytes, MPI_BYTE, &status);
+                    transf_bytes += chunk_bytes;
+                    offset += chunk_bytes;
+                    curr_pointer += chunk_bytes;
+
+                    if ((tot_bytes - transf_bytes) < INT_MAX)
+                        chunk_bytes = (tot_bytes - transf_bytes);
+                } 
+            }    
+
+            MPI_File_close(&fh);
+
+            for(GraphElem i=1;  i < M_local_+1; i++)
+                g->edge_indices_[i] -= g->edge_indices_[0];   
+            g->edge_indices_[0] = 0;
+
+            mbins.clear();
+
+            return g;
+        }
+
     private:
         GraphElem M_;
         GraphElem N_;

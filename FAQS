@@ -43,13 +43,13 @@ http://hpc.pnl.gov/people/hala/grappolo.html
 
 [References]
 
-Blondel, Vincent D., et al. "Fast unfolding of communities in large 
-networks." Journal of statistical mechanics: theory and experiment 
-2008.10 (2008): P10008.
+[Louvain method] Blondel, Vincent D., et al. "Fast unfolding of 
+communities in large networks." Journal of statistical mechanics: 
+theory and experiment 2008.10 (2008): P10008.
 
-Ghosh S, Halappanavar M, Tumeo A, Kalyanaraman A, Gebremedhin AH. 
-miniVite: A Graph Analytics Benchmarking Tool for Massively Parallel 
-Systems.
+[miniVite] Ghosh S, Halappanavar M, Tumeo A, Kalyanaraman A, 
+Gebremedhin AH. miniVite: A Graph Analytics Benchmarking Tool for 
+Massively Parallel Systems.
 
 ---------------------------------------------------------------------------
 Q3. What is the parent application of miniVite? How are they different?
@@ -119,9 +119,13 @@ obtained various websites serving as repositories, such as Sparse TAMU
 collection[1], SNAP repository[2] and MIT Graph Challenge website[3], to name 
 a few of the prominent ones. You can convert graphs from their native format to 
 the binary format that miniVite requires, using the converters in Vite (please 
-see README). If your graph is in Webgraph[4] format, you can easily convert it 
-to an edge list first (example code snippet below), before passing it on to Vite 
-for subsequent binary conversion.
+see README). 
+
+If your graph is in Webgraph[4] format, you can easily convert it to an edge list 
+first (example code snippet below), before passing it on to Vite for subsequent 
+binary conversion, using the C++ version of Webgraph library[5]. Since the C++
+Webgraph library is not actively developed, you may use the original Webgraph
+JAVA library too.
 
 #include "offline_edge_iterator.hpp"
 ...
@@ -139,15 +143,20 @@ while( itor != end ) {
 ofile.close();
 ...
 
-Due to its simple vertex-based distribution, miniVite takes about 2-4s to read a 55GB 
-binary file if you use Burst buffer (Cray DataWarp) or Lustre striping (about 25 OSTs, 
-default 1M blocks). Hence, the overall I/O time that we have observed in most cases is 
-within 1/2% of the overall execution time.
+miniVite takes about 2-4s to read a 55GB binary file if you use Burst buffer 
+(Cray DataWarp) or Lustre striping (about 25 OSTs, default 1M blocks). The overall 
+I/O time for most cases is observed to be within 1/2% of the overall execution time. 
+This is assuming the simple vertex-based distribution (which is the default), if you 
+pass "-b" (only valid when you pass an input graph), then miniVite tries to balance 
+the number of edges (as a result, processes may own dissimilar number of vertices). 
+In such cases, there will be a serial overhead that may increase the I/O time and 
+subsequent distributed graph creation time significantly.
 
 [1] https://sparse.tamu.edu/
 [2] http://snap.stanford.edu/data
 [3] http://graphchallenge.mit.edu/data-sets
 [4] http://webgraph.di.unimi.it/
+[5] http://cnets.indiana.edu/groups/nan/webgraph/
 
 -----------------------------------------------------------------------------------
 Q6. How does one perform weak scaling analysis using miniVite? How does one scale
@@ -252,13 +261,18 @@ mpiexec -n <...> $MINIVITE_PATH/./dspl -r <processes-per-node>
 
 --------------------------------------------------------------------------------
 Q11. miniVite is scalable for a particular input graph, but not for another 
-similar sized graph, why is that?
+similar sized graph, why is that and what can I do to improve the situation?
 --------------------------------------------------------------------------------
 
-A11. Presently, our distribution is vertex-based. That means a process owns N/p 
-vertices and all the edges connected to those N/p vertices (including ghost 
-vertices). Load imbalances are very probable in this type of distribution, 
-depending on the graph structure. 
+A11. Presently, our default distribution is vertex-based. That means a process 
+owns N/p vertices and all the edges connected to those N/p vertices (including 
+ghost vertices). Load imbalances are very probable in this type of distribution, 
+depending on the graph structure. Instead, it may be favorable to use an 
+edge-centric distribution, in which processes own approximately equal number of 
+edges. When the "-b" option is passed, miniVite attempts to distribute the 
+vertices across processes such each process owns approximately similar number 
+of edges. This edge-balanced distribution may reduce the overall communication,
+improving the performance.
 
 As an example, lets say there is a large (real-world) graph, and its structure 
 is such that only a few processes end up owning a majority of edges, as per 
@@ -268,3 +282,22 @@ structure (modularity close to 1 after a few iterations, that means not many
 vertices are migrating to neighboring communities). In both these cases, 
 community detection in miniVite will run for relatively less number of 
 iterations, which may affect the overall scalability.
+
+--------------------------------------------------------------------------------
+Q12. Can miniVite return some statistics on vertex/edge distribution of the
+underlying graph?
+--------------------------------------------------------------------------------
+Yes, please pass -DPRINT_DIST_STATS while building miniVite. When miniVite is 
+executed, it returns some basic information, such as:
+
+-------------------------------------------------------
+Graph edge distribution characteristics
+-------------------------------------------------------
+Number of vertices: 34
+Number of edges: 156
+Maximum number of edges: 80
+Average number of edges: 78
+Expected value of X^2: 6088
+Variance: 4
+Standard deviation: 2
+-------------------------------------------------------

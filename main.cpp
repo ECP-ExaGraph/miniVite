@@ -60,6 +60,7 @@ static int me, nprocs;
 static int ranksPerNode = 1;
 static GraphElem nvRGG = 0;
 static bool generateGraph = false;
+static bool readBalanced = false;
 static int randomEdgePercent = 0;
 static bool randomNumberLCG = false;
 static bool isUnitEdgeWeight = true;
@@ -92,32 +93,20 @@ int main(int argc, char *argv[])
       GenerateRGG gr(nvRGG);
       g = gr.generate(randomNumberLCG, isUnitEdgeWeight, randomEdgePercent);
       //g->print(false);
-
-      if (me == 0) {
-          std::cout << "**********************************************************************" << std::endl;
-          std::cout << "Generated Random Geometric Graph with d: " << gr.get_d() << std::endl;
-#ifndef PRINT_DIST_STATS
-          const GraphElem nv = g->get_nv();
-          const GraphElem ne = g->get_ne();
-          std::cout << "Number of vertices: " << nv << std::endl;
-          std::cout << "Number of edges: " << ne << std::endl;
-#endif
-          //std::cout << "Sparsity: "<< (double)((double)nv / (double)(nvRGG*nvRGG))*100.0 <<"%"<< std::endl;
-          //std::cout << "Average degree: " << (ne / nv) << std::endl;
-      }
-      
-      MPI_Barrier(MPI_COMM_WORLD);
   }
   else { // read input graph
       BinaryEdgeList rm;
-      g = rm.read(me, nprocs, ranksPerNode, inputFileName);
+      if (readBalanced == true)
+          g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
+      else
+          g = rm.read(me, nprocs, ranksPerNode, inputFileName);
       //g->print();
   }
 
+  assert(g != nullptr);
 #ifdef PRINT_DIST_STATS 
   g->print_dist_stats();
 #endif
-  assert(g != nullptr);
 
   MPI_Barrier(MPI_COMM_WORLD);
 #ifdef DEBUG_PRINTF  
@@ -186,10 +175,13 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:r:t:n:wlp:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
+      break;
+    case 'b':
+      readBalanced = true;
       break;
     case 'r':
       ranksPerNode = atoi(optarg);
