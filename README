@@ -125,18 +125,18 @@ Possible options (can be combined):
                      equal number of edges among processes. Irregular number of vertices
                      owned by a particular process. Increases the distributed graph creation
                      time due to serial overheads, but may improve overall execution time.
-3. -n <vertices>   : Pass total number of vertices of the generated graph.
+3. -n <vertices>   : Only valid for synthetically generated inputs. Pass total number of 
+                     vertices of the generated graph.
 4. -l              : Use distributed LCG for randomly choosing edges. If this option 
                      is not used, we will use C++ random number generator (using 
                      std::default_random_engine).
-5. -p <percent>    : Specify percent of overall edges to be randomly generated between
-                     processes.
+5. -p <percent>    : Only valid for synthetically generated inputs. Specify percent of overall 
+                     edges to be randomly generated between processes.
 6. -t <threshold>  : Specify threshold quantity (default: 1.0E-06) used to determine the 
                      exit criteria in an iteration of Louvain method.
-7. -w              : Use Euclidean distance as edge weight. If this option is not used,
-                     edge weights are considered as 1.0. Generate edge weight uniformly 
-                     between (0,1) if Euclidean distance is not available (applicable to 
-                     randomly generated edges).                    
+7. -w              : Only valid for synthetically generated inputs. Use Euclidean distance as edge weight. 
+                     If this option is not used, edge weights are considered as 1.0. Generate 
+                     edge weight uniformly between (0,1) if Euclidean distance is not available.                    
 8. -r <nranks>     : This is used to control the number of aggregators in MPI I/O and is
                      meaningful when an input binary graph file is passed with option "-f".
                      naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
