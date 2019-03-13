@@ -57,12 +57,6 @@
 
 unsigned seed;
 
-// for edge rebalancing
-#define TAKE_EDGES  (100)
-#define GIVE_EDGES  (101)
-#define EDGE_SIZES  (102)
-#define EDGE_DATA   (103)
-
 struct Edge
 {
     GraphElem tail_;
