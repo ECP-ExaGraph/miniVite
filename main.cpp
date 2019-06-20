@@ -64,7 +64,7 @@ static bool readBalanced = false;
 static int randomEdgePercent = 0;
 static bool randomNumberLCG = false;
 static bool isUnitEdgeWeight = true;
-static double threshold = 1.0E-6;
+static GraphWeight threshold = 1.0E-6;
 
 // parse command line parameters
 static void parseCommandLine(const int argc, char * const argv[]);
@@ -126,8 +126,8 @@ int main(int argc, char *argv[])
               << nvRGG << " vertices (in s): " << (tdt/nprocs) << std::endl;
   }
 
-  double currMod = -1.0;
-  double prevMod = -1.0;
+  GraphWeight currMod = -1.0;
+  GraphWeight prevMod = -1.0;
   double total = 0.0;
 
   std::vector<GraphElem> ssizes, rsizes, svdata, rvdata;
