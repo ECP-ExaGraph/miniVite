@@ -744,10 +744,10 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
       if (i != me) {
 #ifdef OMP_SCHEDULE_RUNTIME
 #pragma omp parallel for default(none), shared(rcsizes, rcomms, localCinfo, sinfo, rdispls), \
-          firstprivate(i), schedule(runtime) , if(rcsizes[i] >= 1000)
+          firstprivate(i), schedule(runtime) /*, if(rcsizes[i] >= 1000) */
 #else
 #pragma omp parallel for default(none), shared(rcsizes, rcomms, localCinfo, sinfo, rdispls), \
-          firstprivate(i), schedule(guided) , if(rcsizes[i] >= 1000)
+          firstprivate(i), schedule(guided) /*, if(rcsizes[i] >= 1000) */
 #endif
           for (GraphElem j = 0; j < rcsizes[i]; j++) {
               const GraphElem comm = rcomms[rdispls[i] + j];
@@ -827,11 +827,11 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
 #if defined(USE_MPI_SENDRECV)
 #ifdef OMP_SCHEDULE_RUNTIME
 #pragma omp parallel for default(none), shared(rcsizes, rcomms, localCinfo, sinfo), \
-          firstprivate(i, rpos), schedule(runtime) , if(rcsizes[i] >= 1000)
+          firstprivate(i, rpos), schedule(runtime) /* , if(rcsizes[i] >= 1000) */
 
 #else
 #pragma omp parallel for default(none), shared(rcsizes, rcomms, localCinfo, sinfo), \
-          firstprivate(i, rpos), schedule(guided) , if(rcsizes[i] >= 1000)
+          firstprivate(i, rpos), schedule(guided) /* , if(rcsizes[i] >= 1000) */
 #endif
           for (GraphElem j = 0; j < rcsizes[i]; j++) {
               const GraphElem comm = rcomms[rpos + j];
@@ -1387,8 +1387,6 @@ GraphWeight distLouvainMethod(const int me, const int nprocs, const Graph &dg,
         currComm[i] = targetComm[i];
         targetComm[i] = tmp;
     }
-
-    MPI_Barrier(gcomm);
   } // end of Louvain iteration
 
 #if defined(USE_MPI_RMA)
