@@ -72,9 +72,21 @@ static void parseCommandLine(const int argc, char * const argv[]);
 int main(int argc, char *argv[])
 {
   double t0, t1, t2, t3, ti = 0.0;
-  
-  MPI_Init(&argc, &argv);
+  int max_threads;
 
+  max_threads = omp_get_max_threads();
+
+  if (max_threads > 1) {
+      int provided;
+      MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
+      if (provided < MPI_THREAD_FUNNELED) {
+          std::cerr << "MPI library does not support MPI_THREAD_FUNNELED." << std::endl;
+          MPI_Abort(MPI_COMM_WORLD, -99);
+      }
+  } else {
+      MPI_Init(&argc, &argv);
+  }
+  
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &me);
 
