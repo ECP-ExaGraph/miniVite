@@ -523,6 +523,34 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
   double t0, t1, ta = 0.0;
 #endif
 
+#if defined(USE_MPI_RMA) && !defined(USE_MPI_ACCUMULATE)
+  int num_comm_procs;
+#endif
+
+#if defined(USE_MPI_RMA) && !defined(USE_MPI_ACCUMULATE)
+  spos = 0;
+  rpos = 0;
+  std::vector<int> comm_proc(nprocs);
+  std::vector<int> comm_proc_buf_disp(nprocs);
+  
+  /* Initialize all to -1 (unsure if necessary) */
+  for (int i = 0; i < nprocs; i++) {
+      comm_proc[i] = -1;
+      comm_proc_buf_disp[i] = -1;
+  }
+  
+  num_comm_procs = 0;
+  for (int i = 0; i < nprocs; i++) {
+      if ((i != me) && (ssizes[i] > 0)) {
+          comm_proc[num_comm_procs] = i;
+          comm_proc_buf_disp[num_comm_procs] = spos;
+          num_comm_procs++;
+      }
+      spos += ssizes[i];
+      rpos += rsizes[i];
+  }
+#endif
+
   const GraphElem base = dg.get_base(me), bound = dg.get_bound(me);
   const GraphElem nv = dg.get_lnv();
   MPI_Comm gcomm = dg.get_comm();
@@ -548,8 +576,10 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
 #ifdef DEBUG_PRINTF  
   t0 = MPI_Wtime();
 #endif
+#if !defined(USE_MPI_RMA) || defined(USE_MPI_ACCUMULATE)
   spos = 0;
   rpos = 0;
+#endif
 #if defined(USE_MPI_COLLECTIVES)
   std::vector<int> scnts(nprocs), rcnts(nprocs), sdispls(nprocs), rdispls(nprocs);
   for (int i = 0; i < nprocs; i++) {
@@ -566,19 +596,22 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
           MPI_GRAPH_TYPE, rcdata.data(), rcnts.data(), rdispls.data(), 
           MPI_GRAPH_TYPE, gcomm);
 #elif defined(USE_MPI_RMA)
+#if defined(USE_MPI_ACCUMULATE)
   for (int i = 0; i < nprocs; i++) {
       if ((i != me) && (ssizes[i] > 0)) {
-#if defined(USE_MPI_ACCUMULATE)
           MPI_Accumulate(scdata.data() + spos, ssizes[i], MPI_GRAPH_TYPE, i, 
                   disp[i], ssizes[i], MPI_GRAPH_TYPE, MPI_REPLACE, commwin);
-#else
-          MPI_Put(scdata.data() + spos, ssizes[i], MPI_GRAPH_TYPE, i, 
-                  disp[i], ssizes[i], MPI_GRAPH_TYPE, commwin);
-#endif
       }
       spos += ssizes[i];
       rpos += rsizes[i];
   }
+#else
+  for (int i = 0; i < num_comm_procs; i++) {
+      int target_rank = comm_proc[i];
+      MPI_Put(scdata.data() + comm_proc_buf_disp[i], ssizes[target_rank], MPI_GRAPH_TYPE,
+              target_rank, disp[target_rank], ssizes[target_rank], MPI_GRAPH_TYPE, commwin);
+  }
+#endif
 #elif defined(USE_MPI_SENDRECV)
   for (int i = 0; i < nprocs; i++) {
       if (i != me)
