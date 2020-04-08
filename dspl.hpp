@@ -542,7 +542,7 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
     scdata[i] = comm;
   }
 
-  std::vector<GraphElem> rcsizes(nprocs), scsizes(nprocs);
+  std::vector<GraphElem> rcsizes(nprocs,0), scsizes(nprocs,0);
   std::vector<CommInfo> sinfo, rinfo;
 
 #ifdef DEBUG_PRINTF  
@@ -683,8 +683,13 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
     stcsz += scsizes[i];
   }
 
+#if defined(USE_MPI_COLLECTIVES)
   MPI_Alltoall(scsizes.data(), 1, MPI_GRAPH_TYPE, rcsizes.data(), 
           1, MPI_GRAPH_TYPE, gcomm);
+#else
+  NbConsensus(scsizes.data(), rcsizes.data(), nprocs, gcomm);
+  MPI_Barrier(gcomm);
+#endif
 
 #ifdef DEBUG_PRINTF  
   t1 = MPI_Wtime();
@@ -744,10 +749,10 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
       if (i != me) {
 #ifdef OMP_SCHEDULE_RUNTIME
 #pragma omp parallel for default(none), shared(rcsizes, rcomms, localCinfo, sinfo, rdispls), \
-          firstprivate(i), schedule(runtime) , if(rcsizes[i] >= 1000)
+          firstprivate(i, base), schedule(runtime) , if(rcsizes[i] >= 1000)
 #else
 #pragma omp parallel for default(none), shared(rcsizes, rcomms, localCinfo, sinfo, rdispls), \
-          firstprivate(i), schedule(guided) , if(rcsizes[i] >= 1000)
+          firstprivate(i, base), schedule(guided) , if(rcsizes[i] >= 1000)
 #endif
           for (GraphElem j = 0; j < rcsizes[i]; j++) {
               const GraphElem comm = rcomms[rdispls[i] + j];
@@ -970,7 +975,7 @@ void updateRemoteCommunities(const Graph &dg, std::vector<Comm> &localCinfo,
       remoteArray[tproc].push_back(rcinfo);
   }
 
-  std::vector<GraphElem> send_sz(nprocs), recv_sz(nprocs);
+  std::vector<GraphElem> send_sz(nprocs,0), recv_sz(nprocs,0);
 
 #ifdef DEBUG_PRINTF  
   GraphWeight tc = 0.0;
@@ -986,8 +991,13 @@ void updateRemoteCommunities(const Graph &dg, std::vector<Comm> &localCinfo,
     send_sz[i] = remoteArray[i].size();
   }
 
+#if defined(USE_MPI_COLLECTIVES)
   MPI_Alltoall(send_sz.data(), 1, MPI_GRAPH_TYPE, recv_sz.data(), 
           1, MPI_GRAPH_TYPE, gcomm);
+#else
+  NbConsensus(send_sz.data(), recv_sz.data(), nprocs, gcomm);
+  MPI_Barrier(gcomm);
+#endif
 
 #ifdef DEBUG_PRINTF  
   const double t1 = MPI_Wtime();

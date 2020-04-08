@@ -110,6 +110,50 @@ T genRandom(T lo, T hi)
     return utd(gen, typename Dist::param_type{lo, hi});
 }
 
+// see https://dl.acm.org/doi/pdf/10.1145/1837853.1693476
+void NbConsensus(GraphElem* sendCount, GraphElem* recvCount, const int nprocs, MPI_Comm gcomm)
+{
+    bool done = false, ibar_active = false;
+    MPI_Request ibar_req;
+    std::vector<MPI_Request> sendreqs(nprocs, MPI_REQUEST_NULL);
+    int req_count = 0;
+
+    for (int i = 0 ; i < nprocs; i++) {
+        if (sendCount[i] > 0) {
+            MPI_Issend(&sendCount[i], 1, MPI_GRAPH_TYPE, i, 
+                    100, gcomm, &sendreqs[req_count++]);
+        }
+    }
+        
+    int flag = -1; 
+    MPI_Status stat;
+
+    while(!done) {
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, gcomm, &flag, &stat);
+
+        if (flag) {
+            const int src = stat.MPI_SOURCE;
+            MPI_Recv(&recvCount[src], 1, MPI_GRAPH_TYPE, src, 
+                    stat.MPI_TAG, gcomm, MPI_STATUS_IGNORE);
+        }
+
+        if (ibar_active) {
+            flag = -1;
+            MPI_Test(&ibar_req, &flag, MPI_STATUS_IGNORE);
+            if (flag)
+                done = true;
+        }
+        else {
+            flag = -1;
+            MPI_Testall(req_count, sendreqs.data(), &flag, MPI_STATUSES_IGNORE);
+            if (flag) {
+                MPI_Ibarrier(gcomm, &ibar_req);
+                ibar_active = true;
+            }
+        }
+    }    
+}
+
 // Parallel Linear Congruential Generator
 // x[i] = (a*x[i-1] + b)%M
 class LCG
