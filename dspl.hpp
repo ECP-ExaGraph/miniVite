@@ -420,7 +420,17 @@ GraphWeight distComputeModularity(const Graph &g, std::vector<Comm> &localCinfo,
   assert((clusterWeight.size() == nv));
 #endif
 
-#ifdef OMP_SCHEDULE_RUNTIME
+#ifdef OMP_TARGET_OFFLOAD
+int size;
+MPI_Comm_size(gcomm, &size);
+int ndevs = omp_get_num_devices();
+int to_offload = (ndevs > 0);
+#pragma omp if (to_offload) target teams distribute parallel for \
+reduction(+:le_xx) map(tofrom:le_xx) \
+reduction(+:la2_x) map(tofrom:la2_x) \
+map(clusterWeight, localCinfo) \
+device(me % ndevs)
+#elif OMP_SCHEDULE_RUNTIME
 #pragma omp parallel for default(shared), shared(clusterWeight, localCinfo), \
   reduction(+: le_xx), reduction(+: la2_x) schedule(runtime)
 #else
