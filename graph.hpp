@@ -50,7 +50,7 @@
 #include <climits>
 #include <array>
 #include <unordered_map>
-
+#include <memory>
 #include <mpi.h>
 
 #include "utils.hpp"
@@ -81,6 +81,44 @@ struct EdgeTuple
     {}
 };
 
+#if defined(USE_METALL_DSTORE)
+#include <boost/container/vector.hpp>
+namespace bc = boost::container;
+#include <metall/metall.hpp>
+
+template <typename T>
+struct MetallVector
+{
+    using metall_vector_t = bc::vector<T, metall::manager::allocator_type<T>>; 
+
+    // store
+    MetallVector(std::size_t count, std::string tag, metall::manager& manager) 
+    {
+        if (!count)
+            v_ = manager.construct<metall_vector_t>(tag.c_str())(manager.get_allocator());
+        else
+            v_ = manager.construct<metall_vector_t>(tag.c_str())(count, manager.get_allocator());
+    }
+    // load
+    MetallVector(std::string tag, metall::manager& manager): 
+        v_(manager.find<metall_vector_t>(tag.c_str()).first)
+    {}
+    ~MetallVector()
+    { v_->clear(); }
+   
+    void resize(size_t n, T val=0)
+    { v_->resize(n, val); }
+    void clear() { v_->clear(); }
+    T& operator[](std::size_t idx) { return v_->operator[](idx); }
+    T* data() { return v_->data(); }
+    size_t size() { return v_->size(); }
+    auto begin() { return v_->begin(); }
+    auto end() { return v_->end(); }
+
+    metall_vector_t* v_;
+};
+#endif
+
 // per process graph instance
 class Graph
 {
@@ -92,7 +130,7 @@ class Graph
             MPI_Comm_size(comm_, &size_);
             MPI_Comm_rank(comm_, &rank_);
         }
-        
+                 
         Graph(GraphElem lnv, GraphElem lne, 
                 GraphElem nv, GraphElem ne, 
                 MPI_Comm comm=MPI_COMM_WORLD): 
@@ -107,19 +145,19 @@ class Graph
             edge_list_.resize(lne_); // this is usually populated later
 
             parts_.resize(size_+1);
-            parts_[0] = 0;
 
+            parts_[0] = 0;
             for (GraphElem i = 1; i < size_+1; i++)
                 parts_[i] = ((nv_ * i) / size_);  
-        }
-
+        } 
+        
         ~Graph() 
         {
             edge_list_.clear();
             edge_indices_.clear();
             parts_.clear();
         }
-         
+        
         // update vertex partition information
         void repart(std::vector<GraphElem> const& parts)
         { memcpy(parts_.data(), parts.data(), sizeof(GraphElem)*(size_+1)); }
@@ -172,12 +210,6 @@ class Graph
             return (iter - parts_.begin() - 1);
         }
 
-        GraphElem get_lnv() const { return lnv_; }
-        GraphElem get_lne() const { return lne_; }
-        GraphElem get_nv() const { return nv_; }
-        GraphElem get_ne() const { return ne_; }
-        MPI_Comm get_comm() const { return comm_; }
-       
         // return edge and active info
         // ----------------------------
        
@@ -185,7 +217,13 @@ class Graph
         { return edge_list_[index]; }
          
         Edge& set_edge(GraphElem const index)
-        { return edge_list_[index]; }       
+        { return edge_list_[index]; }      
+        GraphElem get_lnv() const { return lnv_; }
+        GraphElem get_lne() const { return lne_; }
+        GraphElem get_nv() const { return nv_; }
+        GraphElem get_ne() const { return ne_; }
+        MPI_Comm get_comm() const { return comm_; }
+       
         
         // local <--> global index translation
         // -----------------------------------
@@ -288,8 +326,8 @@ class Graph
         std::vector<GraphElem> edge_indices_;
         std::vector<Edge> edge_list_;
     private:
-        GraphElem lnv_, lne_, nv_, ne_;
         std::vector<GraphElem> parts_;       
+        GraphElem lnv_, lne_, nv_, ne_;
         MPI_Comm comm_; 
         int rank_, size_;
 };
@@ -591,6 +629,20 @@ class GenerateRGG
             MPI_Comm_rank(comm_, &rank_);
             MPI_Comm_size(comm_, &nprocs_);
 
+            core_rgg();
+        }
+
+#if defined(USE_METALL_DSTORE)
+        GenerateRGG(MPI_Comm comm = MPI_COMM_WORLD)
+        {
+            comm_ = comm;
+            MPI_Comm_rank(comm_, &rank_);
+            MPI_Comm_size(comm_, &nprocs_);
+        }
+#endif
+
+        void core_rgg()
+        {
             // neighbors
             up_ = down_ = MPI_PROC_NULL;
             if (nprocs_ > 1) {
@@ -625,8 +677,8 @@ class GenerateRGG
             }
 
             // calculate r(n)
-            GraphWeight rc = sqrt((GraphWeight)log(nv)/(GraphWeight)(PI*nv));
-            GraphWeight rt = sqrt((GraphWeight)2.0736/(GraphWeight)nv);
+            GraphWeight rc = sqrt((GraphWeight)log(nv_)/(GraphWeight)(PI*nv_));
+            GraphWeight rt = sqrt((GraphWeight)2.0736/(GraphWeight)nv_);
             rn_ = (rc + rt)/(GraphWeight)2.0;
             
             assert(((GraphWeight)1.0/(GraphWeight)nprocs_) > rn_);
@@ -634,12 +686,261 @@ class GenerateRGG
             MPI_Barrier(comm_);
         }
 
+#if defined(USE_METALL_DSTORE)
+        // unlike the default non-metall version, extra edges added
+        // have unit edge weights currently
+        Graph* generate(std::string path, int randomEdgePercent = 0)
+        {
+            std::vector<EdgeTuple> edgeList;
+
+            // metall dataload
+            metall::manager manager(metall::open_only, (const char *)path.c_str());
+            // edge indices
+            MetallVector<GraphElem> edgeIndicesLoad("edge_indices", manager);
+            // edge list tuple (i,j,w)
+            MetallVector<EdgeTuple> edgeListLoad("edge_list", manager);
+
+            // initialize RGG params after and create graph data structure 
+            // from metall datastore
+            set_nv(edgeIndicesLoad.size());
+            core_rgg();
+            Graph *g = new Graph(n_, 0, nv_, nv_);
+
+            // copy from metall
+            std::memcpy(g->edge_indices_.data(), edgeIndicesLoad.data(), (n_+1)*sizeof(GraphElem));
+            std::memcpy(edgeList.data(), edgeListLoad.data(), edgeListLoad.size()*sizeof(EdgeTuple));
+
+            if (randomEdgePercent) {
+                const GraphElem pnedges = (edgeList.size()/2);
+                GraphElem tot_pnedges = 0;
+
+                MPI_Allreduce(&pnedges, &tot_pnedges, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+
+                // extra #edges per process
+                const GraphElem nrande = (((GraphElem)randomEdgePercent * tot_pnedges)/100);
+                GraphElem pnrande;
+
+                // TODO FIXME try to ensure a fair edge distibution
+                if (nrande < nprocs_) {
+                    if (rank_ == (nprocs_ - 1))
+                        pnrande += nrande;
+                }
+                else {
+                    pnrande = nrande / nprocs_;
+                    const GraphElem pnrem = nrande % nprocs_;
+                    if (pnrem != 0) {
+                        if (rank_ == (nprocs_ - 1))
+                            pnrande += pnrem;
+                    }
+                }
+
+                // add pnrande edges 
+                // send/recv buffers
+                std::vector<std::vector<EdgeTuple>> rand_edges(nprocs_); 
+                std::vector<EdgeTuple> sendrand_edges, recvrand_edges;
+
+                // outgoing/incoming send/recv sizes
+                // TODO FIXME if number of randomly added edges are above
+                // INT_MAX, weird things will happen, fix it
+                std::vector<int> sendrand_sizes(nprocs_), recvrand_sizes(nprocs_);
+
+#if defined(PRINT_EXTRA_NEDGES)
+                int extraEdges = 0;
+#endif
+
+#if defined(DEBUG_PRINTF)
+                for (int i = 0; i < nprocs_; i++) {
+                    if (i == rank_) {
+                        std::cout << "[" << i << "]Target process for random edge insertion between " 
+                            << lo << " and " << hi << std::endl;
+                    }
+                    MPI_Barrier(comm_);
+                }
+#endif
+                // make sure each process has a 
+                // different seed this time since
+                // we want random edges
+                unsigned rande_seed = (unsigned)(time(0)^getpid());
+                GraphWeight weight = 1.0;
+                std::hash<GraphElem> reh;
+
+                // cannot use genRandom if it's already been seeded
+                std::default_random_engine re(rande_seed); 
+                std::uniform_int_distribution<GraphElem> IR, JR; 
+                std::uniform_real_distribution<GraphWeight> IJW; 
+
+                for (GraphElem k = 0; k < pnrande; k++) {
+                    // randomly pick start/end vertex and target from my list
+                    const GraphElem i = (GraphElem)IR(re, std::uniform_int_distribution<GraphElem>::param_type{0, (n_- 1)});
+                    const GraphElem g_j = (GraphElem)JR(re, std::uniform_int_distribution<GraphElem>::param_type{0, (nv_- 1)});
+                    const int target = g->get_owner(g_j);
+                    const GraphElem j = g->global_to_local(g_j, target); // local
+
+                    if (i == j) 
+                        continue;
+
+                    const GraphElem g_i = g->local_to_global(i);
+
+                    // check for duplicates prior to edgeList insertion
+                    // TODO add a scheme to tolerate duplicates to avoid
+                    // searching overhead (ditto for default non-metall case)
+                    auto found = std::find_if(edgeList.begin(), edgeList.end(), 
+                            [&](EdgeTuple const& et) 
+                            { return ((et.ij_[0] == i) && (et.ij_[1] == g_j)); });
+
+                    // OK to insert, not in list
+                    if (found == std::end(edgeList)) { 
+                        rand_edges[target].emplace_back(j, g_i, weight);
+                        sendrand_sizes[target]++;
+
+#if defined(PRINT_EXTRA_NEDGES)
+                        extraEdges++;
+#endif
+#if defined(CHECK_NUM_EDGES)
+                        numEdges++;
+#endif                    
+                        // assume unit edge weight for now
+                        edgeList.emplace_back(i, g_j, weight);
+                        g->edge_indices_[i+1]++;
+                    }
+                }
+
+#if defined(PRINT_EXTRA_NEDGES)
+                int totExtraEdges = 0;
+                MPI_Reduce(&extraEdges, &totExtraEdges, 1, MPI_INT, MPI_SUM, 0, comm_);
+                if (rank_ == 0)
+                    std::cout << "Adding extra " << totExtraEdges << " edges while trying to incorporate " 
+                        << randomEdgePercent << "%" << " extra edges globally." << std::endl;
+#endif
+
+                MPI_Barrier(comm_);
+
+                // communicate ghosts edges
+                MPI_Request rande_sreq;
+
+                MPI_Ialltoall(sendrand_sizes.data(), 1, MPI_INT, 
+                        recvrand_sizes.data(), 1, MPI_INT, comm_, 
+                        &rande_sreq);
+
+                // send data if outgoing size > 0
+                for (int p = 0; p < nprocs_; p++) {
+                    sendrand_edges.insert(sendrand_edges.end(), 
+                            rand_edges[p].begin(), rand_edges[p].end());
+                }
+
+                MPI_Wait(&rande_sreq, MPI_STATUS_IGNORE);
+
+                // total recvbuffer size
+                const int rcount = std::accumulate(recvrand_sizes.begin(), recvrand_sizes.end(), 0);
+                recvrand_edges.resize(rcount);
+
+                // alltoallv for incoming data
+                // TODO FIXME make sure size of extra edges is 
+                // within INT limits
+
+                int rpos = 0, spos = 0;
+                std::vector<int> sdispls(nprocs_), rdispls(nprocs_);
+
+                for (int p = 0; p < nprocs_; p++) {
+
+                    sendrand_sizes[p] *= sizeof(struct EdgeTuple);
+                    recvrand_sizes[p] *= sizeof(struct EdgeTuple);
+
+                    sdispls[p] = spos;
+                    rdispls[p] = rpos;
+
+                    spos += sendrand_sizes[p];
+                    rpos += recvrand_sizes[p];
+                }
+
+                MPI_Alltoallv(sendrand_edges.data(), sendrand_sizes.data(), sdispls.data(), 
+                        MPI_BYTE, recvrand_edges.data(), recvrand_sizes.data(), rdispls.data(), 
+                        MPI_BYTE, comm_);
+
+                // update local edge list
+                for (int i = 0; i < rcount; i++) {
+#if defined(CHECK_NUM_EDGES)
+                    numEdges++;
+#endif
+                    edgeList.emplace_back(recvrand_edges[i].ij_[0], recvrand_edges[i].ij_[1], recvrand_edges[i].w_);
+                    g->edge_indices_[recvrand_edges[i].ij_[0]+1]++; 
+                }
+
+                sendrand_edges.clear();
+                recvrand_edges.clear();
+                rand_edges.clear();
+            } // end of (conditional) random edges addition
+
+            MPI_Barrier(comm_);
+
+            // set graph edge indices and create graph
+
+            std::vector<GraphElem> ecTmp(n_+1);
+            std::partial_sum(g->edge_indices_.begin(), g->edge_indices_.end(), ecTmp.begin());
+            g->edge_indices_ = ecTmp;
+
+            for(GraphElem i = 1; i < n_+1; i++)
+                g->edge_indices_[i] -= g->edge_indices_[0];   
+            g->edge_indices_[0] = 0;
+
+            g->set_edge_index(0, 0);
+            for (GraphElem i = 0; i < n_; i++)
+                g->set_edge_index(i+1, g->edge_indices_[i+1]);
+
+            const GraphElem nedges = g->edge_indices_[n_] - g->edge_indices_[0];
+            g->set_nedges(nedges);
+
+            // copy edge list from existing graph to edgeList
+            // set graph edge list
+            // sort edge list
+            auto ecmp = [] (EdgeTuple const& e0, EdgeTuple const& e1)
+            { return ((e0.ij_[0] < e1.ij_[0]) || ((e0.ij_[0] == e1.ij_[0]) && (e0.ij_[1] < e1.ij_[1]))); };
+
+            if (!std::is_sorted(edgeList.begin(), edgeList.end(), ecmp)) {
+#if defined(DEBUG_PRINTF)
+                std::cout << "Edge list is not sorted." << std::endl;
+#endif
+                std::sort(edgeList.begin(), edgeList.end(), ecmp);
+            }
+#if defined(DEBUG_PRINTF)
+            else
+                std::cout << "Edge list is sorted!" << std::endl;
+#endif
+
+            GraphElem ePos = 0;
+            for (GraphElem i = 0; i < n_; i++) {
+                GraphElem e0, e1;
+
+                g->edge_range(i, e0, e1);
+#if defined(DEBUG_PRINTF)
+                if ((i % 100000) == 0)
+                    std::cout << "Processing edges for vertex: " << i << ", range(" << e0 << ", " << e1 <<
+                        ")" << std::endl;
+#endif
+                for (GraphElem j = e0; j < e1; j++) {
+                    Edge &edge = g->set_edge(j);
+
+                    assert(ePos == j);
+                    assert(i == edgeList[ePos].ij_[0]);
+
+                    edge.tail_ = edgeList[ePos].ij_[1];
+                    edge.weight_ = edgeList[ePos].w_;
+
+                    ePos++;
+                }
+            }
+
+            return g;
+        }
+#endif // END OF USE_METALL_DSTORE
+
         // create RGG and returns Graph
         // TODO FIXME use OpenMP wherever possible
         // use Euclidean distance as edge weight
         // for random edges, choose from (0,1)
         // otherwise, use unit weight throughout
-        Graph* generate(bool isLCG, bool unitEdgeWeight = true, int randomEdgePercent = 0)
+
+        Graph* generate(bool isLCG, std::string path="", bool unitEdgeWeight = true, int randomEdgePercent = 0)
         {
             // Generate random coordinate points
             std::vector<GraphWeight> X, Y, X_up, Y_up, X_down, Y_down;
@@ -747,6 +1048,7 @@ class GenerateRGG
             std::vector<EdgeTuple> sendup_edges, senddn_edges; 
             std::vector<EdgeTuple> recvup_edges, recvdn_edges;
             std::vector<EdgeTuple> edgeList;
+
             
             // counts, indexing: [2] = {up - 0, down - 1}
             // TODO can't we use MPI_INT 
@@ -1184,6 +1486,18 @@ class GenerateRGG
             const GraphElem tne = g->get_ne();
             assert(tne == tot_numEdges);
 #endif
+            // metall datastore
+#if defined(USE_METALL_DSTORE)
+            if (!path.empty()) {
+                metall::manager manager(metall::create_only, (const char *)path.c_str());
+                // edge indices
+                MetallVector<GraphElem> edgeIndicesStore(nv_, "edge_indices", manager);
+                std::memcpy(edgeIndicesStore.data(), g->edge_indices_.data(), nv_*sizeof(GraphElem));
+                // edge list tuple (i,j,w)
+                MetallVector<EdgeTuple> edgeListStore(nedges, "edge_list", manager);
+                std::memcpy(edgeListStore.data(), edgeList.data(), nedges*sizeof(EdgeTuple));
+            }
+#endif
             edgeList.clear();
             
             X.clear();
@@ -1203,6 +1517,7 @@ class GenerateRGG
 
         GraphWeight get_d() const { return rn_; }
         GraphElem get_nv() const { return nv_; }
+        void set_nv(GraphElem nv) { nv_ = nv; }
 
     private:
         GraphElem nv_, n_;

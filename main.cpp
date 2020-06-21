@@ -65,6 +65,9 @@ static int randomEdgePercent = 0;
 static bool randomNumberLCG = false;
 static bool isUnitEdgeWeight = true;
 static GraphWeight threshold = 1.0E-6;
+static bool metallAlloc = false;
+static std::string dataStorePath;
+static bool loadGraph = false;
 
 // parse command line parameters
 static void parseCommandLine(const int argc, char * const argv[]);
@@ -86,7 +89,11 @@ int main(int argc, char *argv[])
   } else {
       MPI_Init(&argc, &argv);
   }
-  
+
+#if defined(USE_METALL_DSTORE)
+  metallAlloc = true;
+#endif
+
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &me);
 
@@ -100,11 +107,24 @@ int main(int argc, char *argv[])
 
   Graph* g = nullptr;
 
-  // generate graph only supports RGG as of now
-  if (generateGraph) { 
-      GenerateRGG gr(nvRGG);
-      g = gr.generate(randomNumberLCG, isUnitEdgeWeight, randomEdgePercent);
-      //g->print(false);
+  if (generateGraph) {  // only supports RGG as of now
+      if (metallAlloc) { // write/load graph to/from metall datastore 
+          if (loadGraph) {
+              GenerateRGG gr(nvRGG);
+              g = gr.generate(randomNumberLCG, dataStorePath, isUnitEdgeWeight, randomEdgePercent);
+          }
+          else { // default case will store the generated graph in metall datastore
+#if defined(USE_METALL_DSTORE)
+              GenerateRGG gr;
+              g = gr.generate(dataStorePath, randomEdgePercent);
+#endif
+          }
+      }
+      else {
+          GenerateRGG gr(nvRGG);
+          g = gr.generate(randomNumberLCG, "", isUnitEdgeWeight, randomEdgePercent);
+          //g->print(false);
+      }
   }
   else { // read input graph
       BinaryEdgeList rm;
@@ -187,7 +207,7 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:s:c")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -215,6 +235,12 @@ void parseCommandLine(const int argc, char * const argv[])
     case 'p':
       randomEdgePercent = atoi(optarg);
       break;
+    case 's':
+      dataStorePath.assign(optarg);
+      break;
+    case 'c':
+      loadGraph = true;
+      break;
     default:
       assert(0 && "Should not reach here!!");
       break;
@@ -225,6 +251,26 @@ void parseCommandLine(const int argc, char * const argv[])
       std::cerr << "Must specify some options." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
+
+  if (me == 0 && metallAlloc && !generateGraph) {
+      std::cerr << "Metall datastore is only applicable with generated RGG." << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, -99);
+  }
+  
+  if (me == 0 && metallAlloc && dataStorePath.empty()) {
+      std::cerr << "Metall datastore path cannot be empty." << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, -99);
+  }
+  
+  if (me == 0 && loadGraph && !metallAlloc) {
+      std::cerr << "Loading graph from Metall datastore valid only when USE_METALL_DSTORE macro must be defined." << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, -99);
+  }   
+   
+  if (me == 0 && loadGraph && dataStorePath.empty()) {
+      std::cerr << "Loading graph from Metall datastore intended, but file path is passed." << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, -99);
+  } 
   
   if (me == 0 && !generateGraph && inputFileName.empty()) {
       std::cerr << "Must specify a binary file name with -f or provide parameters for generating a graph." << std::endl;
@@ -249,5 +295,9 @@ void parseCommandLine(const int argc, char * const argv[])
   if (me == 0 && generateGraph && ((randomEdgePercent < 0) || (randomEdgePercent >= 100))) {
       std::cerr << "Invalid random edge percentage for generated graph!" << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
+  }
+
+  if (me == 0 && readBalanced && generateGraph) {
+      std::cout << "Balanced graph distribution is only applicable to real-world graphs, and not applicable to synthetic graphs." << std::endl;
   }
 } // parseCommandLine

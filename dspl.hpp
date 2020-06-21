@@ -58,6 +58,7 @@
 #include "graph.hpp"
 #include "utils.hpp"
 
+
 struct Comm {
   GraphElem size;
   GraphWeight degree;

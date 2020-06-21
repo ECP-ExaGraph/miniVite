@@ -1,24 +1,31 @@
-CXX = mpicxx
+CXX = mpic++
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
-OPTFLAGS = -O3 -xHost -qopenmp -DPRINT_DIST_STATS #-DPRINT_EXTRA_NEDGES #-DUSE_MPI_RMA -DUSE_MPI_ACCUMULATE #-DUSE_32_BIT_GRAPH #-DDEBUG_PRINTF #-DUSE_MPI_RMA #-DPRINT_LCG_DOUBLE_LOHI_RANDOM_NUMBERS#-DUSE_MPI_RMA #-DPRINT_LCG_DOUBLE_RANDOM_NUMBERS #-DPRINT_RANDOM_XY_COORD
+OPTFLAGS = -I. -O3 -fopenmp -DPRINT_DIST_STATS #-DPRINT_EXTRA_NEDGES #-DUSE_MPI_RMA -DUSE_MPI_ACCUMULATE #-DUSE_32_BIT_GRAPH #-DDEBUG_PRINTF #-DUSE_MPI_RMA #-DPRINT_LCG_DOUBLE_LOHI_RANDOM_NUMBERS#-DUSE_MPI_RMA #-DPRINT_LCG_DOUBLE_RANDOM_NUMBERS #-DPRINT_RANDOM_XY_COORD
 #-DUSE_MPI_SENDRECV
 #-DUSE_MPI_COLLECTIVES
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
-SNTFLAGS = -std=c++11 -fopenmp -fsanitize=address -O1 -fno-omit-frame-pointer
+LDFLAGS = -fopenmp
+SNTFLAGS = -std=c++11 -openmp -fsanitize=address -O1 -fno-omit-frame-pointer
 CXXFLAGS = -std=c++11 -g $(OPTFLAGS)
 
-OBJ = main.o
+# metall requires boost libraries and a C++17 compliant compiler
+USE_METALL_DSTORE=1
+ifeq ($(USE_METALL_DSTORE),1)
+    METALL_PATH=$(HOME)/sources/metall/include
+    BOOSTINC_PATH=/usr/local/include
+    BOOSTLIB_PATH=/usr/local/lib
+    CXXFLAGS += -std=c++17 -I$(METALL_PATH) -DUSE_METALL_DSTORE -I$(BOOSTINC_PATH) -L$(BOOSTLIB_PATH) -lboost_system
+endif
+
+SRC = main.cpp
 TARGET = miniVite
 
 all: $(TARGET)
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c -o $@ $^
-
-$(TARGET):  $(OBJ)
-	$(CXX) $^ $(OPTFLAGS) -o $@
+$(TARGET): $(SRC)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 .PHONY: clean
 
 clean:
-	rm -rf *~ $(OBJ) $(TARGET)
+	rm -rf *~ *.dSYM *.o $(TARGET)
