@@ -110,14 +110,14 @@ int main(int argc, char *argv[])
   if (generateGraph) {  // only supports RGG as of now
       if (metallAlloc) { // write/load graph to/from metall datastore 
           if (loadGraph) {
-              GenerateRGG gr(nvRGG);
-              g = gr.generate(randomNumberLCG, dataStorePath, isUnitEdgeWeight, randomEdgePercent);
-          }
-          else { // default case will store the generated graph in metall datastore
 #if defined(USE_METALL_DSTORE)
               GenerateRGG gr;
               g = gr.generate(dataStorePath, randomEdgePercent);
 #endif
+          }
+          else { // default case will store the generated graph in metall datastore
+              GenerateRGG gr(nvRGG);
+              g = gr.generate(randomNumberLCG, dataStorePath, isUnitEdgeWeight, randomEdgePercent);
           }
       }
       else {

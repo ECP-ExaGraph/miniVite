@@ -699,7 +699,10 @@ class GenerateRGG
             MetallVector<GraphElem> edgeIndicesLoad("edge_indices", manager);
             // edge list tuple (i,j,w)
             MetallVector<EdgeTuple> edgeListLoad("edge_list", manager);
-
+                
+            if (rank_ == 0)
+                std::cout << "Loaded from the Metall datastore: " << path << std::endl;
+            
             // initialize RGG params after and create graph data structure 
             // from metall datastore
             set_nv(edgeIndicesLoad.size());
@@ -1493,11 +1496,13 @@ class GenerateRGG
             if (!path.empty()) {
                 metall::manager manager(metall::create_only, (const char *)path.c_str());
                 // edge indices
-                MetallVector<GraphElem> edgeIndicesStore(nv_, "edge_indices", manager);
-                std::memcpy(edgeIndicesStore.data(), g->edge_indices_.data(), nv_*sizeof(GraphElem));
+                MetallVector<GraphElem> edgeIndicesStore((n_+1), "edge_indices", manager);
+                std::memcpy(edgeIndicesStore.data(), g->edge_indices_.data(), (n_+1)*sizeof(GraphElem));
                 // edge list tuple (i,j,w)
                 MetallVector<EdgeTuple> edgeListStore(nedges, "edge_list", manager);
                 std::memcpy(edgeListStore.data(), edgeList.data(), nedges*sizeof(EdgeTuple));
+                if (rank_ == 0)
+                    std::cout << "Stored in the Metall datastore: " << path << std::endl;
             }
 #endif
             edgeList.clear();
