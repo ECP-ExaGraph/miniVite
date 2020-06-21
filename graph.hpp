@@ -102,7 +102,12 @@ struct MetallVector
     // load
     MetallVector(std::string tag, metall::manager& manager): 
         v_(manager.find<metall_vector_t>(tag.c_str()).first)
-    {}
+    {
+        if (!v_) {
+            std::cerr << "Object does not exist, hence cannot be loaded from " << tag << std::endl;
+            std::abort();
+        }
+    }
     ~MetallVector()
     { v_->clear(); }
    
@@ -691,23 +696,23 @@ class GenerateRGG
         // have unit edge weights currently
         Graph* generate(std::string path, int randomEdgePercent = 0)
         {
-            std::vector<EdgeTuple> edgeList;
-
             // metall dataload
             metall::manager manager(metall::open_only, (const char *)path.c_str());
             // edge indices
             MetallVector<GraphElem> edgeIndicesLoad("edge_indices", manager);
             // edge list tuple (i,j,w)
             MetallVector<EdgeTuple> edgeListLoad("edge_list", manager);
-                
+             
             if (rank_ == 0)
                 std::cout << "Loaded from the Metall datastore: " << path << std::endl;
-            
+                
             // initialize RGG params after and create graph data structure 
             // from metall datastore
-            set_nv(edgeIndicesLoad.size());
+            const GraphElem lnv = edgeIndicesLoad.size() - 1;
+            MPI_Allreduce(&lnv, &nv_, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
             core_rgg();
             Graph *g = new Graph(n_, 0, nv_, nv_);
+            std::vector<EdgeTuple> edgeList(edgeListLoad.size());
 
             // copy from metall
             std::memcpy(g->edge_indices_.data(), edgeIndicesLoad.data(), (n_+1)*sizeof(GraphElem));
