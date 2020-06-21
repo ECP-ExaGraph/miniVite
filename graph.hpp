@@ -890,23 +890,25 @@ class GenerateRGG
             const GraphElem nedges = g->edge_indices_[n_] - g->edge_indices_[0];
             g->set_nedges(nedges);
 
+            // sort edge list only if extra edges were added
+            if (randomEdgePercent) {
+                auto ecmp = [] (EdgeTuple const& e0, EdgeTuple const& e1)
+                { return ((e0.ij_[0] < e1.ij_[0]) || ((e0.ij_[0] == e1.ij_[0]) && (e0.ij_[1] < e1.ij_[1]))); };
+
+                if (!std::is_sorted(edgeList.begin(), edgeList.end(), ecmp)) {
+#if defined(DEBUG_PRINTF)
+                    std::cout << "Edge list is not sorted." << std::endl;
+#endif
+                    std::sort(edgeList.begin(), edgeList.end(), ecmp);
+                }
+#if defined(DEBUG_PRINTF)
+                else
+                    std::cout << "Edge list is sorted!" << std::endl;
+#endif
+            }
+
             // copy edge list from existing graph to edgeList
             // set graph edge list
-            // sort edge list
-            auto ecmp = [] (EdgeTuple const& e0, EdgeTuple const& e1)
-            { return ((e0.ij_[0] < e1.ij_[0]) || ((e0.ij_[0] == e1.ij_[0]) && (e0.ij_[1] < e1.ij_[1]))); };
-
-            if (!std::is_sorted(edgeList.begin(), edgeList.end(), ecmp)) {
-#if defined(DEBUG_PRINTF)
-                std::cout << "Edge list is not sorted." << std::endl;
-#endif
-                std::sort(edgeList.begin(), edgeList.end(), ecmp);
-            }
-#if defined(DEBUG_PRINTF)
-            else
-                std::cout << "Edge list is sorted!" << std::endl;
-#endif
-
             GraphElem ePos = 0;
             for (GraphElem i = 0; i < n_; i++) {
                 GraphElem e0, e1;
