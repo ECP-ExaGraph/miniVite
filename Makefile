@@ -13,8 +13,7 @@ USE_METALL_DSTORE=1
 ifeq ($(USE_METALL_DSTORE),1)
     METALL_PATH=$(HOME)/sources/metall/include
     BOOSTINC_PATH=/usr/local/include
-    BOOSTLIB_PATH=/usr/local/lib
-    CXXFLAGS += -std=c++17 -I$(METALL_PATH) -DUSE_METALL_DSTORE -I$(BOOSTINC_PATH) -L$(BOOSTLIB_PATH) -lboost_system
+    CXXFLAGS += -std=c++17 -lstdc++fs -DUSE_METALL_DSTORE -I$(METALL_PATH) -I$(BOOSTINC_PATH) 
 endif
 
 SRC = main.cpp
