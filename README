@@ -151,6 +151,6 @@ Possible options (can be combined):
 8.  -r <nranks>     : This is used to control the number of aggregators in MPI I/O and is
                       meaningful when an input binary graph file is passed with option "-f".
                       naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
-9.  -s <path>       : Store the generated graph in file-backed storage. Only supported for synthetically
-                      generated graphs.
-10. -c              : Load a synthetically generated from file-backed store.                     
+9.  -s <path>       : Store the generated graph in Metall file-backed storage. Only supported for 
+                      synthetically generated graphs.
+10. -c <path>       : Load a synthetically generated from Metall data-store.                     
