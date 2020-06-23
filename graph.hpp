@@ -705,8 +705,8 @@ class GenerateRGG
                 new_path = path + '/' + pe_str.str();
             // metall dataload
             metall::manager manager(metall::open_only, (const char *)new_path.c_str());
-            // edge indices
-            MetallVector<GraphElem> edgeIndicesLoad("edge_indices", manager);
+            // edge counts
+            MetallVector<GraphElem> edgeIndicesLoad("edge_counts", manager);
             // edge list tuple (i,j,w)
             MetallVector<EdgeTuple> edgeListLoad("edge_list", manager);
              
@@ -885,23 +885,26 @@ class GenerateRGG
                 recvrand_edges.clear();
                 rand_edges.clear();
 
-                // set graph edge indices and create graph
+            } // end of (conditional) random edges addition
+            
+            // set graph edge indices and create graph
 
-                std::vector<GraphElem> ecTmp(n_+1);
-                std::partial_sum(g->edge_indices_.begin(), g->edge_indices_.end(), ecTmp.begin());
-                g->edge_indices_ = ecTmp;
+            std::vector<GraphElem> ecTmp(n_+1);
+            std::partial_sum(g->edge_indices_.begin(), g->edge_indices_.end(), ecTmp.begin());
+            g->edge_indices_ = ecTmp;
 
-                for(GraphElem i = 1; i < n_+1; i++)
-                    g->edge_indices_[i] -= g->edge_indices_[0];   
-                g->edge_indices_[0] = 0;
+            for(GraphElem i = 1; i < n_+1; i++)
+                g->edge_indices_[i] -= g->edge_indices_[0];   
+            g->edge_indices_[0] = 0;
 
-                g->set_edge_index(0, 0);
-                for (GraphElem i = 0; i < n_; i++)
-                    g->set_edge_index(i+1, g->edge_indices_[i+1]);
+            g->set_edge_index(0, 0);
+            for (GraphElem i = 0; i < n_; i++)
+                g->set_edge_index(i+1, g->edge_indices_[i+1]);
 
-                const GraphElem nedges = g->edge_indices_[n_] - g->edge_indices_[0];
-                g->set_nedges(nedges);
+            const GraphElem nedges = g->edge_indices_[n_] - g->edge_indices_[0];
+            g->set_nedges(nedges);
 
+            if (randomEdgePercent) {
                 // sort edge list only if extra edges were added
                 auto ecmp = [] (EdgeTuple const& e0, EdgeTuple const& e1)
                 { return ((e0.ij_[0] < e1.ij_[0]) || ((e0.ij_[0] == e1.ij_[0]) && (e0.ij_[1] < e1.ij_[1]))); };
@@ -916,10 +919,6 @@ class GenerateRGG
                 else
                     std::cout << "Edge list is sorted!" << std::endl;
 #endif
-            } // end of (conditional) random edges addition
-            else { // set the #edges
-                const GraphElem nedges = g->edge_indices_[n_] - g->edge_indices_[0];
-                g->set_nedges(nedges);
             }
 
             MPI_Barrier(comm_);
@@ -948,6 +947,8 @@ class GenerateRGG
                     ePos++;
                 }
             }
+
+            edgeList.clear();
 
             return g;
         }
@@ -1442,7 +1443,22 @@ class GenerateRGG
             } // end of (conditional) random edges addition
 
             MPI_Barrier(comm_);
-  
+
+#if defined(USE_METALL_DSTORE)
+            // add process to path
+            std::stringstream pe_str;
+            pe_str << rank_;
+            std::string new_path; 
+            if (path.back() == '/')
+                new_path = path + pe_str.str();
+            else 
+                new_path = path + '/' + pe_str.str();
+            metall::manager manager(metall::create_only, (const char *)new_path.c_str());
+            // store edge counts
+            MetallVector<GraphElem> edgeIndicesStore((n_+1), "edge_counts", manager);
+            std::memcpy(edgeIndicesStore.data(), g->edge_indices_.data(), (n_+1)*sizeof(GraphElem));
+#endif
+
             // set graph edge indices
             
             std::vector<GraphElem> ecTmp(n_+1);
@@ -1505,27 +1521,13 @@ class GenerateRGG
             const GraphElem tne = g->get_ne();
             assert(tne == tot_numEdges);
 #endif
-            // metall datastore
+
 #if defined(USE_METALL_DSTORE)
-            if (!path.empty()) {
-                // add process to path
-                std::stringstream pe_str;
-                pe_str << rank_;
-                std::string new_path; 
-                if (path.back() == '/')
-                    new_path = path + pe_str.str();
-                else 
-                    new_path = path + '/' + pe_str.str();
-                metall::manager manager(metall::create_only, (const char *)new_path.c_str());
-                // edge indices
-                MetallVector<GraphElem> edgeIndicesStore((n_+1), "edge_indices", manager);
-                std::memcpy(edgeIndicesStore.data(), g->edge_indices_.data(), (n_+1)*sizeof(GraphElem));
-                // edge list tuple (i,j,w)
-                MetallVector<EdgeTuple> edgeListStore(nedges, "edge_list", manager);
-                std::memcpy(edgeListStore.data(), edgeList.data(), nedges*sizeof(EdgeTuple));
-                if (rank_ == 0)
-                    std::cout << "Stored in the Metall datastore: " << path << std::endl;
-            }
+            // store edge list tuple (i,j,w)
+            MetallVector<EdgeTuple> edgeListStore(nedges, "edge_list", manager);
+            std::memcpy(edgeListStore.data(), edgeList.data(), nedges*sizeof(EdgeTuple));
+            if (rank_ == 0)
+                std::cout << "Stored in the Metall datastore: " << path << std::endl;
 #endif
             edgeList.clear();
             
