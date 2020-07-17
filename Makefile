@@ -11,7 +11,7 @@ CXXFLAGS = -std=c++11 -g $(OPTFLAGS)
 # metall requires boost libraries and a C++17 compliant compiler
 USE_METALL_DSTORE=1
 ifeq ($(USE_METALL_DSTORE),1)
-    METALL_PATH=$(HOME)/sources/metall/include
+    METALL_PATH=./metall/include
     BOOSTINC_PATH=/usr/local/include
     CXXFLAGS += -std=c++17 -lstdc++fs -DUSE_METALL_DSTORE -I$(METALL_PATH) -I$(BOOSTINC_PATH) 
 endif
