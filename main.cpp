@@ -65,6 +65,9 @@ static int randomEdgePercent = 0;
 static bool randomNumberLCG = false;
 static bool isUnitEdgeWeight = true;
 static GraphWeight threshold = 1.0E-6;
+static bool loadGraph = false;
+static std::string dataStorePath;
+static std::string dataStoreBackupPath;
 
 // parse command line parameters
 static void parseCommandLine(const int argc, char * const argv[]);
@@ -86,7 +89,7 @@ int main(int argc, char *argv[])
   } else {
       MPI_Init(&argc, &argv);
   }
-  
+
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &me);
 
@@ -98,44 +101,66 @@ int main(int argc, char *argv[])
   MPI_Barrier(MPI_COMM_WORLD);
   td0 = MPI_Wtime();
 
-  Graph* g = nullptr;
+  GraphType* g = nullptr;
 
   // generate graph only supports RGG as of now
-  if (generateGraph) { 
+  if (generateGraph) {
       GenerateRGG gr(nvRGG);
-      g = gr.generate(randomNumberLCG, isUnitEdgeWeight, randomEdgePercent);
+      g = gr.generate(randomNumberLCG, dataStorePath, isUnitEdgeWeight, randomEdgePercent);
+#if defined(USE_METALL_DSTORE)
+    if (dataStoreBackupPath.empty()) {
+      if (me == 0) std::cout << "Flush data" << std::endl;
+      metall_mpi->get_local_manager().flush();
+    } else {
+      if (me == 0) std::cout << "Take a snapshot to " << dataStoreBackupPath << std::endl;
+      metall_mpi->snapshot(dataStoreBackupPath.c_str()); // flush() is called internally
+    }
+#endif
       //g->print(false);
-  }
-  else { // read input graph
+  } else if (loadGraph) {
+#if defined(USE_METALL_DSTORE)
+    if (!dataStoreBackupPath.empty()) {
+      if (me == 0) std::cout << "Copy files from " << dataStoreBackupPath << std::endl;
+      metall::utility::metall_mpi_adaptor::copy(dataStoreBackupPath.c_str(), dataStorePath.c_str(), MPI_COMM_WORLD);
+    }
+#endif
+      GenerateRGG gr;
+      g = gr.load(dataStorePath);
+  } else { // read input graph
       BinaryEdgeList rm;
       if (readBalanced == true)
-          g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
+          MPI_Abort(MPI_COMM_WORLD, -99);
+          // g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
       else
           g = rm.read(me, nprocs, ranksPerNode, inputFileName);
       //g->print();
   }
 
   assert(g != nullptr);
-#ifdef PRINT_DIST_STATS 
+#ifdef PRINT_DIST_STATS
   g->print_dist_stats();
 #endif
 
   MPI_Barrier(MPI_COMM_WORLD);
-#ifdef DEBUG_PRINTF  
+#ifdef DEBUG_PRINTF
   assert(g);
-#endif  
+#endif
   td1 = MPI_Wtime();
   td = td1 - td0;
 
   MPI_Reduce(&td, &tdt, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
- 
+
   if (me == 0)  {
-      if (!generateGraph)
-          std::cout << "Time to read input file and create distributed graph (in s): " 
-              << (tdt/nprocs) << std::endl;
+      if (generateGraph)
+          std::cout << "Time to generate distributed graph of "
+                    << nvRGG << " vertices (in s): " << (tdt / nprocs) << std::endl;
+      else if (loadGraph)
+        std::cout << "Time to load input file and create distributed graph (in s): "
+                  << (tdt / nprocs) << std::endl;
       else
-          std::cout << "Time to generate distributed graph of " 
-              << nvRGG << " vertices (in s): " << (tdt/nprocs) << std::endl;
+          std::cout << "Time to read input file and create distributed graph (in s): "
+                    << (tdt / nprocs) << std::endl;
+
   }
 
   GraphWeight currMod = -1.0;
@@ -148,23 +173,23 @@ int main(int argc, char *argv[])
 #endif
   size_t ssz = 0, rsz = 0;
   int iters = 0;
-    
+
   MPI_Barrier(MPI_COMM_WORLD);
 
   t1 = MPI_Wtime();
 
 #if defined(USE_MPI_RMA)
-  currMod = distLouvainMethod(me, nprocs, *g, ssz, rsz, ssizes, rsizes, 
+  currMod = distLouvainMethod(me, nprocs, *g, ssz, rsz, ssizes, rsizes,
                 svdata, rvdata, currMod, threshold, iters, commwin);
 #else
-  currMod = distLouvainMethod(me, nprocs, *g, ssz, rsz, ssizes, rsizes, 
+  currMod = distLouvainMethod(me, nprocs, *g, ssz, rsz, ssizes, rsizes,
                 svdata, rvdata, currMod, threshold, iters);
 #endif
   MPI_Barrier(MPI_COMM_WORLD);
   t0 = MPI_Wtime();
-  
+
   if(me == 0) {
-      std::cout << "Modularity: " << currMod << ", Iterations: " 
+      std::cout << "Modularity: " << currMod << ", Iterations: "
           << iters << ", Time (in s): "<<t0-t1<< std::endl;
 
       std::cout << "**********************************************************************" << std::endl;
@@ -174,8 +199,12 @@ int main(int argc, char *argv[])
 
   double tot_time = 0.0;
   MPI_Reduce(&total, &tot_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-  
+
+#if defined(USE_METALL_DSTORE)
+  delete metall_mpi;
+#else
   delete g;
+#endif
   destroyCommunityMPIType();
 
   MPI_Finalize();
@@ -187,7 +216,7 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:s:c:B:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -204,7 +233,7 @@ void parseCommandLine(const int argc, char * const argv[])
     case 'n':
       nvRGG = atol(optarg);
       if (nvRGG > 0)
-          generateGraph = true; 
+          generateGraph = true;
       break;
     case 'w':
       isUnitEdgeWeight = false;
@@ -214,6 +243,17 @@ void parseCommandLine(const int argc, char * const argv[])
       break;
     case 'p':
       randomEdgePercent = atoi(optarg);
+      break;
+    case 's':
+      generateGraph = true;
+      dataStorePath.assign(optarg);
+      break;
+    case 'c':
+      loadGraph = true;
+      dataStorePath.assign(optarg);
+      break;
+    case 'B':
+      dataStoreBackupPath.assign(optarg);
       break;
     default:
       assert(0 && "Should not reach here!!");
@@ -225,29 +265,37 @@ void parseCommandLine(const int argc, char * const argv[])
       std::cerr << "Must specify some options." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
-  
-  if (me == 0 && !generateGraph && inputFileName.empty()) {
+
+  if (me == 0 && !generateGraph && !loadGraph && inputFileName.empty()) {
       std::cerr << "Must specify a binary file name with -f or provide parameters for generating a graph." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
-   
+
   if (me == 0 && !generateGraph && randomNumberLCG) {
       std::cerr << "Must specify -g for graph generation using LCG." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
-  } 
-   
+  }
+
   if (me == 0 && !generateGraph && randomEdgePercent) {
       std::cerr << "Must specify -g for graph generation first to add random edges to it." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
-  } 
-  
+  }
+
   if (me == 0 && !generateGraph && !isUnitEdgeWeight) {
       std::cerr << "Must specify -g for graph generation first before setting edge weights." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
-  
+
   if (me == 0 && generateGraph && ((randomEdgePercent < 0) || (randomEdgePercent >= 100))) {
       std::cerr << "Invalid random edge percentage for generated graph!" << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
+
+#if defined(USE_METALL_DSTORE)
+  if (me == 0 && dataStorePath.empty()) {
+    std::cerr << "Must specify -s for Metall data store location" << std::endl;
+    MPI_Abort(MPI_COMM_WORLD, -99);
+  }
+#endif
+
 } // parseCommandLine
