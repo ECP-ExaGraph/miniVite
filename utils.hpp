@@ -252,7 +252,7 @@ class LCG
                     std::cout << "------------" << std::endl;
 
                     for (GraphElem i = 0; i < n_; i++) {
-                        drand_[i] = (GraphWeight)((GraphWeight)fabs(rnums_[i]) * mult ); // 0-1
+                        drand_[i] = (GraphWeight)((GraphWeight)std::fabs(rnums_[i]) * mult ); // 0-1
                         std::cout << drand_[i] << std::endl;
                     }
                 }
@@ -260,7 +260,7 @@ class LCG
             }
 #else
             for (GraphElem i = 0; i < n_; i++)
-                drand_[i] = (GraphWeight)((GraphWeight)fabs(rnums_[i]) * mult); // 0-1
+                drand_[i] = (GraphWeight)((GraphWeight)std::fabs(rnums_[i]) * mult); // 0-1
 #endif
         }
          

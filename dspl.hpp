@@ -425,10 +425,12 @@ int size;
 MPI_Comm_size(gcomm, &size);
 int ndevs = omp_get_num_devices();
 int to_offload = (ndevs > 0);
+const GraphWeight* clusterWeight_ptr = clusterWeight.data();
+const Comm* localCinfo_ptr = localCinfo.data();
 #pragma omp target teams distribute parallel for if (to_offload) \
 reduction(+:le_xx) map(tofrom:le_xx) \
 reduction(+:la2_x) map(tofrom:la2_x) \
-map(clusterWeight, localCinfo) \
+map(from:clusterWeight_ptr, localCinfo_ptr) \
 device(me % ndevs)
 #elif OMP_SCHEDULE_RUNTIME
 #pragma omp parallel for default(shared), shared(clusterWeight, localCinfo), \
@@ -438,8 +440,8 @@ device(me % ndevs)
   reduction(+: le_xx), reduction(+: la2_x) schedule(static)
 #endif
   for (GraphElem i = 0L; i < nv; i++) {
-    le_xx += clusterWeight[i];
-    la2_x += static_cast<GraphWeight>(localCinfo[i].degree) * static_cast<GraphWeight>(localCinfo[i].degree); 
+    le_xx += clusterWeight_ptr[i];
+    la2_x += static_cast<GraphWeight>(localCinfo_ptr[i].degree) * static_cast<GraphWeight>(localCinfo_ptr[i].degree); 
   } 
   le_la_xx[0] = le_xx;
   le_la_xx[1] = la2_x;
