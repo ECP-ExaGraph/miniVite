@@ -422,14 +422,13 @@ GraphWeight distComputeModularity(const Graph &g, std::vector<Comm> &localCinfo,
 
 #ifdef OMP_TARGET_OFFLOAD
 int size;
-MPI_Comm_size(gcomm, &size);
 int ndevs = omp_get_num_devices();
 int to_offload = (ndevs > 0);
 const GraphWeight* clusterWeight_ptr = clusterWeight.data();
 const Comm* localCinfo_ptr = localCinfo.data();
 #pragma omp target teams distribute parallel for if (to_offload) \
-reduction(+:le_xx) map(tofrom:le_xx) \
-reduction(+:la2_x) map(tofrom:la2_x) \
+reduction(+:le_xx) \
+reduction(+:la2_x) \
 map(from:clusterWeight_ptr, localCinfo_ptr) \
 device(me % ndevs)
 #elif OMP_SCHEDULE_RUNTIME
