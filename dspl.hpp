@@ -419,13 +419,12 @@ GraphWeight distComputeModularity(const Graph &g, std::vector<Comm> &localCinfo,
 #ifdef DEBUG_PRINTF  
   assert((clusterWeight.size() == nv));
 #endif
-
+const GraphWeight* clusterWeight_ptr = clusterWeight.data();
+const Comm* localCinfo_ptr = localCinfo.data();
 #ifdef OMP_TARGET_OFFLOAD
 int size;
 int ndevs = omp_get_num_devices();
 int to_offload = (ndevs > 0);
-const GraphWeight* clusterWeight_ptr = clusterWeight.data();
-const Comm* localCinfo_ptr = localCinfo.data();
 #pragma omp target parallel for if (to_offload) \
 reduction(+:le_xx) \
 reduction(+:la2_x) \
