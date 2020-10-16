@@ -61,7 +61,7 @@ static int ranksPerNode = 1;
 static GraphElem nvRGG = 0;
 static bool generateGraph = false;
 static bool readBalanced = false;
-static int randomEdgePercent = 0;
+static GraphWeight randomEdgePercent = 0.0;
 static bool randomNumberLCG = false;
 static bool isUnitEdgeWeight = true;
 static GraphWeight threshold = 1.0E-6;
@@ -213,7 +213,7 @@ void parseCommandLine(const int argc, char * const argv[])
       randomNumberLCG = true;
       break;
     case 'p':
-      randomEdgePercent = atoi(optarg);
+      randomEdgePercent = atof(optarg);
       break;
     default:
       assert(0 && "Should not reach here!!");
@@ -236,7 +236,7 @@ void parseCommandLine(const int argc, char * const argv[])
       MPI_Abort(MPI_COMM_WORLD, -99);
   } 
    
-  if (me == 0 && !generateGraph && randomEdgePercent) {
+  if (me == 0 && !generateGraph && (randomEdgePercent > 0.0)) {
       std::cerr << "Must specify -g for graph generation first to add random edges to it." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   } 
