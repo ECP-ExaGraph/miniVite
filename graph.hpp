@@ -942,7 +942,7 @@ class GenerateRGG
                 MPI_Allreduce(&pnedges, &tot_pnedges, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
                 
                 // extra #edges per process
-                const GraphElem nrande = (((GraphElem)randomEdgePercent * (GraphWeight)tot_pnedges)/100);
+                const GraphElem nrande = (((GraphElem)(randomEdgePercent * (GraphWeight)tot_pnedges))/100);
                 GraphElem pnrande;
 
                 // TODO FIXME try to ensure a fair edge distibution
