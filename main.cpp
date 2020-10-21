@@ -162,19 +162,22 @@ int main(int argc, char *argv[])
 #endif
   MPI_Barrier(MPI_COMM_WORLD);
   t0 = MPI_Wtime();
-  
-  if(me == 0) {
-      std::cout << "Modularity: " << currMod << ", Iterations: " 
-          << iters << ", Time (in s): "<<t0-t1<< std::endl;
+  total = t0 - t1;
 
-      std::cout << "**********************************************************************" << std::endl;
+  double tot_time = 0.0;
+  MPI_Reduce(&total, &tot_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+  if (me == 0) {
+      double avgt = (tot_time / nprocs);
+      std::cout << "-------------------------------------------------------" << std::endl;
+      std::cout << "Average total time (in s), #Processes: " << avgt << ", " << nprocs << std::endl;
+      std::cout << "Modularity, #Iterations: " << currMod << ", " << iters << std::endl;
+      std::cout << "MODS (final modularity * average time): " << (currMod * avgt) << std::endl;
+      std::cout << "-------------------------------------------------------" << std::endl;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  double tot_time = 0.0;
-  MPI_Reduce(&total, &tot_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-  
   delete g;
   destroyCommunityMPIType();
 
