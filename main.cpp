@@ -169,6 +169,11 @@ int main(int argc, char *argv[])
 
   if (me == 0) {
       double avgt = (tot_time / nprocs);
+      if (!generateGraph) {
+        std::cout << "-------------------------------------------------------" << std::endl;
+        std::cout << "File: " << inputFileName << std::endl;
+        std::cout << "-------------------------------------------------------" << std::endl;
+      }
       std::cout << "-------------------------------------------------------" << std::endl;
       std::cout << "Average total time (in s), #Processes: " << avgt << ", " << nprocs << std::endl;
       std::cout << "Modularity, #Iterations: " << currMod << ", " << iters << std::endl;

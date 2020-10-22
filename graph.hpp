@@ -250,19 +250,20 @@ class Graph
         // print statistics about edge distribution
         void print_dist_stats()
         {
-            GraphElem sumdeg = 0, maxdeg = 0;
+            long sumdeg = 0, maxdeg = 0;
+            long lne = (long) lne_;
 
-            MPI_Reduce(&lne_, &sumdeg, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
-            MPI_Reduce(&lne_, &maxdeg, 1, MPI_GRAPH_TYPE, MPI_MAX, 0, comm_);
+            MPI_Reduce(&lne, &sumdeg, 1, MPI_LONG, MPI_SUM, 0, comm_);
+            MPI_Reduce(&lne, &maxdeg, 1, MPI_LONG, MPI_MAX, 0, comm_);
 
-            GraphElem my_sq = lne_*lne_;
-            GraphElem sum_sq = 0;
-            MPI_Reduce(&my_sq, &sum_sq, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+            long my_sq = lne*lne;
+            long sum_sq = 0;
+            MPI_Reduce(&my_sq, &sum_sq, 1, MPI_LONG, MPI_SUM, 0, comm_);
 
-            GraphWeight average  = (GraphWeight) sumdeg / size_;
-            GraphWeight avg_sq   = (GraphWeight) sum_sq / size_;
-            GraphWeight var      = avg_sq - (average*average);
-            GraphWeight stddev   = sqrt(var);
+            double average  = (double) sumdeg / size_;
+            double avg_sq   = (double) sum_sq / size_;
+            double var      = avg_sq - (average*average);
+            double stddev   = sqrt(var);
 
             MPI_Barrier(comm_);
 
