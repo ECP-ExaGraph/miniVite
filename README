@@ -7,7 +7,7 @@ miniVite (/mini/ˈviːte/)
  ABOUT
 -------
 *******
-miniVite is a proxy app that implements a single phase of Louvain 
+miniVite[*] is a proxy app that implements a single phase of Louvain 
 method in distributed memory for graph community detection. Please 
 refer to the following paper for a detailed discussion on
 distributed memory Louvain method implementation:
@@ -55,8 +55,16 @@ and C++11 compliant compiler for building.
 
 Please contact the following for any queries or support:
 
-Sayan Ghosh, WSU (zsayanz at gmail dot com)
+Sayan Ghosh, PNNL (sg0 at pnnl dot gov)
 Mahantesh Halappanavar, PNNL (hala at pnnl dot gov)
+
+[*] Ghosh S, Halappanavar M, Tumeo A, Kalyanaraman 
+A, Gebremedhin AH. miniVite: A graph analytics benchmarking tool 
+for massively parallel systems. In 2018 IEEE/ACM Performance Modeling, 
+Benchmarking and Simulation of High Performance Computer Systems 
+(PMBS) 2018 Nov 12 (pp. 51-56). IEEE.
+
+Please '*' this repository on GitHub if the code is useful to you.
 
 *************
 -------------
@@ -97,7 +105,8 @@ macros at compile time:
 2. MPI Send-Receive: -DUSE_MPI_SENDRECV
 3. MPI RMA:          -DUSE_MPI_RMA (using -DUSE_MPI_ACCUMULATE 
                      additionally ensures atomic put) 
-4. Default:          Uses MPI point-to-point nonblocking API.
+4. Default:          Uses MPI point-to-point nonblocking API in communication 
+                     intensive parts..
 
 Apart from these, we use MPI (blocking) collectives, mostly
 MPI_Alltoall.
@@ -140,3 +149,4 @@ Possible options (can be combined):
 8. -r <nranks>     : This is used to control the number of aggregators in MPI I/O and is
                      meaningful when an input binary graph file is passed with option "-f".
                      naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
+9. -s              : Print graph data (edge list along with weights).

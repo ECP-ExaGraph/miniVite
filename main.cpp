@@ -61,6 +61,7 @@ static int ranksPerNode = 1;
 static GraphElem nvRGG = 0;
 static bool generateGraph = false;
 static bool readBalanced = false;
+static bool showGraph = false;
 static GraphWeight randomEdgePercent = 0.0;
 static bool randomNumberLCG = false;
 static bool isUnitEdgeWeight = true;
@@ -104,7 +105,6 @@ int main(int argc, char *argv[])
   if (generateGraph) { 
       GenerateRGG gr(nvRGG);
       g = gr.generate(randomNumberLCG, isUnitEdgeWeight, randomEdgePercent);
-      //g->print(false);
   }
   else { // read input graph
       BinaryEdgeList rm;
@@ -112,10 +112,12 @@ int main(int argc, char *argv[])
           g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
       else
           g = rm.read(me, nprocs, ranksPerNode, inputFileName);
-      g->print(true);
   }
 
   assert(g != nullptr);
+  if (showGraph)
+      g->print();
+
 #ifdef PRINT_DIST_STATS 
   g->print_dist_stats();
 #endif
@@ -201,7 +203,7 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:s")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -229,8 +231,11 @@ void parseCommandLine(const int argc, char * const argv[])
     case 'p':
       randomEdgePercent = atof(optarg);
       break;
+    case 's':
+      showGraph = true;
+      break;
     default:
-      assert(0 && "Should not reach here!!");
+      assert(0 && "Option not recognized!!!");
       break;
     }
   }
