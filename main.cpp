@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
           g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
       else
           g = rm.read(me, nprocs, ranksPerNode, inputFileName);
-      //g->print();
+      g->print(true);
   }
 
   assert(g != nullptr);
@@ -174,6 +174,12 @@ int main(int argc, char *argv[])
         std::cout << "File: " << inputFileName << std::endl;
         std::cout << "-------------------------------------------------------" << std::endl;
       }
+      std::cout << "-------------------------------------------------------" << std::endl;
+#ifdef USE_32_BIT_GRAPH
+      std::cout << "32-bit datatype" << std::endl;
+#else
+      std::cout << "64-bit datatype" << std::endl;
+#endif
       std::cout << "-------------------------------------------------------" << std::endl;
       std::cout << "Average total time (in s), #Processes: " << avgt << ", " << nprocs << std::endl;
       std::cout << "Modularity, #Iterations: " << currMod << ", " << iters << std::endl;
