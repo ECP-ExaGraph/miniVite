@@ -492,7 +492,7 @@ void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
         const std::vector<GraphElem> &rvdata, const std::vector<GraphElem> &currComm, 
         const std::vector<Comm> &localCinfo, std::map<GraphElem,Comm> &remoteCinfo, 
         std::unordered_map<GraphElem, GraphElem> &remoteComm, std::map<GraphElem,Comm> &remoteCupdate, 
-        const MPI_Win &commwin, const std::vector<MPI_Aint> &disp)
+        const MPI_Win &commwin, const std::vector<GraphElem> &disp)
 #else
 void fillRemoteCommunities(const Graph &dg, const int me, const int nprocs,
         const size_t &ssz, const size_t &rsz, const std::vector<GraphElem> &ssizes, 
@@ -1288,7 +1288,7 @@ GraphWeight distLouvainMethod(const int me, const int nprocs, const Graph &dg,
           svdata, rvdata, me, nprocs, commwin);
   
   // store the remote displacements 
-  std::vector<MPI_Aint> disp(nprocs);
+  std::vector<GraphElem> disp(nprocs);
   MPI_Exscan(ssizes.data(), (GraphElem*)disp.data(), nprocs, MPI_GRAPH_TYPE, 
           MPI_SUM, gcomm);
 #else
