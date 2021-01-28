@@ -152,7 +152,7 @@ Here is how to build miniVite + Metall using Spack.
 
 To use Metall, use CMake option '-DUSE_METALL=on'.
 
-To use Umap instead of system mmap() inside of Metall, use CMake option `-DUSE_UMAP=on` along with '-DUSE_METALL=on'.
+To use Umap instead of system mmap() inside of Metall, use CMake option `-DUSE_UMAP=on` along with `-DUSE_METALL=on`.
 
 ```bash
 # Install and load Metall
