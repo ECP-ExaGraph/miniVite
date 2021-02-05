@@ -150,3 +150,57 @@ Possible options (can be combined):
                      meaningful when an input binary graph file is passed with option "-f".
                      naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
 9. -s              : Print graph data (edge list along with weights).
+
+
+---
+
+# miniVite + Metall (and Umap)
+
+## Build
+
+Here is how to build miniVite + Metall using Spack.
+
+To use Metall, use CMake option '-DUSE_METALL=on'.
+
+To use Umap instead of system mmap() inside of Metall, use CMake option `-DUSE_UMAP=on` along with `-DUSE_METALL=on`.
+
+```bash
+# Install and load Metall
+spack install metall
+spack load metall
+
+# Install and load Umap (required if one uses Umap)
+spack install umap
+spack load umap
+
+cd minivite
+mkdir build
+cd build
+cmake ../ \
+ -DUSE_METALL=ON \
+ -DUSE_UMAP=ON # required if one uses Umap
+make
+```
+
+Use `CMAKE_CXX_COMPILER=/path/to/g++` and `MPI_CXX_COMPILER=/path/to/mpic++` CMake options to specify a C++ compiler and a MPI compiler, respectively.
+
+### Build without Spack
+
+Here are the CMake variables to specify the locations of Boost C++ Libraries, Metall, and Umap manually.
+* `BOOST_ROOT=/path/to/boost`
+* `METALL_ROOT=/path/to/metall`
+* `UMAP_ROOT=/path/to/umap/install/dir/root`
+
+miniVite uses header files of Boost C++ Libraries and Metall. One does not need to build them.
+On the other hand, one has to build and install Umap.
+
+## Run miniVite (example)
+
+```bash
+# Run community detection and store graph:
+mpiexec -n 2 ./miniVite -n 64 -s "/tmp"
+
+# Load graph and run community detection
+# (requires the same number of processes as above):
+mpiexec -n 2 ./miniVite -c "/tmp"
+```
