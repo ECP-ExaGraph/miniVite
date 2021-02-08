@@ -944,7 +944,7 @@ class GenerateRGG
                 
                 // extra #edges per process
                 const GraphElem nrande = (((GraphElem)(randomEdgePercent * (GraphWeight)tot_pnedges))/100);
-                GraphElem pnrande;
+                GraphElem pnrande = 0.0;
 
                 // TODO FIXME try to ensure a fair edge distibution
                 if (nrande < nprocs_) {
