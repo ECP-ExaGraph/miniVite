@@ -55,6 +55,8 @@
 
 #include "dspl.hpp"
 
+// TODO FIXME add options for desired MPI thread-level
+
 static std::string inputFileName;
 static int me, nprocs;
 static int ranksPerNode = 1;
@@ -79,9 +81,9 @@ int main(int argc, char *argv[])
 
   if (max_threads > 1) {
       int provided;
-      MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
-      if (provided < MPI_THREAD_FUNNELED) {
-          std::cerr << "MPI library does not support MPI_THREAD_FUNNELED." << std::endl;
+      MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+      if (provided < MPI_THREAD_MULTIPLE) {
+          std::cerr << "MPI library does not support MPI_THREAD_MULTIPLE." << std::endl;
           MPI_Abort(MPI_COMM_WORLD, -99);
       }
   } else {
