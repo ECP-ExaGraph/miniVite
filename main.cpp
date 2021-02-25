@@ -230,7 +230,7 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:s:c:B:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:br:t:n:wlp:s:B:g:i:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -261,11 +261,11 @@ void parseCommandLine(const int argc, char * const argv[])
     case 's':
       showGraph = true;
       break;
-    case 's':
+    case 'g':
       generateGraph = true;
       dataStorePath.assign(optarg);
       break;
-    case 'c':
+    case 'i':
       loadGraph = true;
       dataStorePath.assign(optarg);
       break;

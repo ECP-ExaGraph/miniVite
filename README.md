@@ -198,9 +198,9 @@ On the other hand, one has to build and install Umap.
 
 ```bash
 # Run community detection and store graph:
-mpiexec -n 2 ./miniVite -n 64 -s "/tmp"
+mpiexec -n 2 ./miniVite -n 64 -g "/tmp/graph"
 
 # Load graph and run community detection
 # (requires the same number of processes as above):
-mpiexec -n 2 ./miniVite -c "/tmp"
+mpiexec -n 2 ./miniVite -i "/tmp/graph"
 ```
