@@ -75,6 +75,9 @@ static void parseCommandLine(const int argc, char * const argv[]);
 int main(int argc, char *argv[])
 {
   double t0, t1, t2, t3, ti = 0.0;
+#ifdef DISABLE_THREAD_MULTIPLE_CHECK
+  MPI_Init(&argc, &argv);
+#else  
   int max_threads;
 
   max_threads = omp_get_max_threads();
@@ -89,7 +92,8 @@ int main(int argc, char *argv[])
   } else {
       MPI_Init(&argc, &argv);
   }
-  
+#endif
+
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &me);
 
