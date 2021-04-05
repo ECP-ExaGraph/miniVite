@@ -127,6 +127,9 @@ mpiexec -n 2 bin/./minivite -l -n 100
 mpiexec -n 2 bin/./minivite -n 100
 mpiexec -n 2 bin/./minivite -p 2 -n 100
 
+[On Cray systems, pass MPICH_MAX_THREAD_SAFETY=multiple or 
+pass -DDISABLE_THREAD_MULTIPLE_CHECK while building miniVite.]
+
 Possible options (can be combined):
 
 1. -f <bin-file>   : Specify input binary file after this argument. 
