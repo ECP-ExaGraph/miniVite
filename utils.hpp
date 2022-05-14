@@ -42,7 +42,10 @@
 #define UTILS_HPP
 
 #define PI                          (3.14159)
+
+#ifndef MAX_PRINT_NEDGE
 #define MAX_PRINT_NEDGE             (10000000)
+#endif
 
 // Read https://en.wikipedia.org/wiki/Linear_congruential_generator#Period_length
 // about choice of LCG parameters
