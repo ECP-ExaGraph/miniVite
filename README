@@ -44,7 +44,7 @@ conversion.
 Vite could be downloaded from (please don't use the past
 PNNL/PNL link to download Vite, the following GitHub
 link is the correct one):
-https://github.com/Exa-Graph/vite
+https://github.com/ECP-ExaGraph/vite
 
 Unlike Vite, we do not implement any heuristics to improve the
 performance of Louvain method. miniVite is a baseline parallel
