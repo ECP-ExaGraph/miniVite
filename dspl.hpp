@@ -177,7 +177,6 @@ GraphElem distGetMaxIndex(const std::unordered_map<GraphElem, GraphElem> &clmap,
                           const GraphElem currSize, const GraphWeight currDegree, const GraphElem currComm,
 			  const GraphElem base, const GraphElem bound, const GraphWeight constant)
 {
-  std::unordered_map<GraphElem, GraphElem>::const_iterator storedAlready;
   GraphElem maxIndex = currComm;
   GraphWeight curGain = 0.0, maxGain = 0.0;
   GraphWeight eix = static_cast<GraphWeight>(counter[0]) - static_cast<GraphWeight>(selfLoop);
@@ -188,38 +187,37 @@ GraphElem distGetMaxIndex(const std::unordered_map<GraphElem, GraphElem> &clmap,
   GraphElem maxSize = currSize; 
   GraphElem size = 0;
 
-  storedAlready = clmap.begin();
 #ifdef DEBUG_PRINTF  
-  assert(storedAlready != clmap.end());
+  assert(!clmap.empty());
 #endif
-  do {
-      if (currComm != storedAlready->first) {
+  for (auto [tcomm, tcomm2] : clmap) {
+      if (currComm != tcomm) {
 
           // is_local, direct access local info
-          if ((storedAlready->first >= base) && (storedAlready->first < bound)) {
-              ay = localCinfo[storedAlready->first-base].degree;
-              size = localCinfo[storedAlready->first - base].size;   
+          if ((tcomm >= base) && (tcomm < bound)) {
+              ay = localCinfo[tcomm - base].degree;
+              size = localCinfo[tcomm - base].size;
           }
           else {
               // is_remote, lookup map
-              std::map<GraphElem,Comm>::const_iterator citer = remoteCinfo.find(storedAlready->first);
+              std::map<GraphElem,Comm>::const_iterator citer = remoteCinfo.find(tcomm);
               ay = citer->second.degree;
               size = citer->second.size; 
           }
 
-          eiy = counter[storedAlready->second];
+          eiy = counter[tcomm2];
 
           curGain = 2.0 * (eiy - eix) - 2.0 * vDegree * (ay - ax) * constant;
 
           if ((curGain > maxGain) ||
-                  ((curGain == maxGain) && (curGain != 0.0) && (storedAlready->first < maxIndex))) {
+                  ((curGain == maxGain) && (curGain != 0.0) && (tcomm < maxIndex))) {
               maxGain = curGain;
-              maxIndex = storedAlready->first;
+              maxIndex = tcomm;
               maxSize = size;
           }
       }
-      storedAlready++;
-  } while (storedAlready != clmap.end());
+  }
+
 
   if ((maxSize == 1) && (currSize == 1) && (maxIndex > currComm))
     maxIndex = currComm;
