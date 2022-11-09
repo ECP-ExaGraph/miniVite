@@ -191,30 +191,30 @@ GraphElem distGetMaxIndex(const std::unordered_map<GraphElem, GraphWeight> &clma
   assert(!clmap.empty());
 #endif
   for (auto [tcomm, tweight] : clmap) {
-      if (currComm != tcomm) {
+      // currComm != tcomm is always true
+      // because this case is handled in distBuildLocalMapCounter
 
-          // is_local, direct access local info
-          if ((tcomm >= base) && (tcomm < bound)) {
-              ay = localCinfo[tcomm - base].degree;
-              size = localCinfo[tcomm - base].size;
-          }
-          else {
-              // is_remote, lookup map
-              std::map<GraphElem,Comm>::const_iterator citer = remoteCinfo.find(tcomm);
-              ay = citer->second.degree;
-              size = citer->second.size; 
-          }
+      // is_local, direct access local info
+      if ((tcomm >= base) && (tcomm < bound)) {
+          ay = localCinfo[tcomm - base].degree;
+          size = localCinfo[tcomm - base].size;
+      }
+      else {
+          // is_remote, lookup map
+          std::map<GraphElem,Comm>::const_iterator citer = remoteCinfo.find(tcomm);
+          ay = citer->second.degree;
+          size = citer->second.size; 
+      }
 
-          eiy = tweight;
+      eiy = tweight;
 
-          curGain = 2.0 * (eiy - eix) - 2.0 * vDegree * (ay - ax) * constant;
+      curGain = 2.0 * (eiy - eix) - 2.0 * vDegree * (ay - ax) * constant;
 
-          if ((curGain > maxGain) ||
-                  ((curGain == maxGain) && (curGain != 0.0) && (tcomm < maxIndex))) {
-              maxGain = curGain;
-              maxIndex = tcomm;
-              maxSize = size;
-          }
+      if ((curGain > maxGain) ||
+              ((curGain == maxGain) && (curGain != 0.0) && (tcomm < maxIndex))) {
+          maxGain = curGain;
+          maxIndex = tcomm;
+          maxSize = size;
       }
   }
 
