@@ -528,6 +528,20 @@ GraphWeight distBuildLocalMapCounterSmall(
   return selfLoop;
 } // distBuildLocalMapCounterSmall
 
+// Some thresholds for different optimizations
+
+#ifndef MINIVITE_SMALL_THRESHOLD_0
+#define MINIVITE_SMALL_THRESHOLD_0 20
+#define MINIVITE_SMALL_RADIX_0 1
+#endif
+#ifndef MINIVITE_SMALL_THRESHOLD_1
+#define MINIVITE_SMALL_THRESHOLD_1 20
+#define MINIVITE_SMALL_RADIX_1 4
+#endif
+#ifndef MINIVITE_SORT_THRESHOLD
+#define MINIVITE_SORT_THRESHOLD INT64_MAX
+#endif
+
 void distExecuteLouvainIteration(const GraphElem i, const Graph &dg, const std::vector<GraphElem> &currComm,
 				 std::vector<GraphElem> &targetComm, const std::vector<GraphWeight> &vDegree,
                                  std::vector<Comm> &localCinfo, std::vector<Comm> &localCupdate,
@@ -562,16 +576,52 @@ void distExecuteLouvainIteration(const GraphElem i, const Graph &dg, const std::
   dg.edge_range(i, e0, e1);
 
   if (e0 != e1) {
-    std::unordered_map<GraphElem, GraphWeight> clmap;
+    // Use different optimization strategies based on `e1 - e0`
+    // Thresholds are configurable via macros
     GraphWeight ccVal = 0;
 
-    selfLoop =  distBuildLocalMapCounter(e0, e1, clmap, dg, 
-                    currComm, remoteComm, i, base, bound, cc, ccVal);
-
-    clusterWeight[i] += ccVal;
-
-    localTarget = distGetMaxIndex(clmap, selfLoop, localCinfo, remoteCinfo, 
-                    vDegree[i], ccSize, ccDegree, cc, base, bound, constantForSecondTerm, ccVal);
+    if (e1 - e0 < MINIVITE_SMALL_THRESHOLD_0) {
+      fakemap<GraphElem, GraphWeight, SCC_SMALL_THRESHOLD_0, SCC_SMALL_RADIX_0>
+          clmap;
+      selfLoop = distBuildLocalMapCounterSmall<SCC_SMALL_THRESHOLD_0,
+                                               SCC_SMALL_RADIX_0>(
+          e0, e1, clmap, dg, currComm, remoteComm, i, base, bound, cc, ccVal);
+      clusterWeight[i] += ccVal;
+      localTarget =
+          distGetMaxIndexSmall<SCC_SMALL_THRESHOLD_0, SCC_SMALL_RADIX_0>(
+              clmap, selfLoop, localCinfo, remoteCinfo, vDegree[i], ccSize,
+              ccDegree, cc, base, bound, constantForSecondTerm, ccVal);
+    } else if (e1 - e0 < MINIVITE_SMALL_THRESHOLD_1) {
+      fakemap<GraphElem, GraphWeight, SCC_SMALL_THRESHOLD_1, SCC_SMALL_RADIX_1>
+          clmap;
+      selfLoop = distBuildLocalMapCounterSmall<SCC_SMALL_THRESHOLD_1,
+                                               SCC_SMALL_RADIX_1>(
+          e0, e1, clmap, dg, currComm, remoteComm, i, base, bound, cc, ccVal);
+      clusterWeight[i] += ccVal;
+      localTarget =
+          distGetMaxIndexSmall<SCC_SMALL_THRESHOLD_1, SCC_SMALL_RADIX_1>(
+              clmap, selfLoop, localCinfo, remoteCinfo, vDegree[i], ccSize,
+              ccDegree, cc, base, bound, constantForSecondTerm, ccVal);
+    } else if (e1 - e0 < MINIVITE_SORT_THRESHOLD) {
+      static
+#ifdef _OPENMP
+          thread_local
+#endif
+          std::vector<std::pair<GraphElem, GraphWeight>>
+              clmap;
+      clmap.clear();
+      selfLoop = distBuildLocalMapCounterSort(
+          e0, e1, clmap, dg, currComm, remoteComm, i, base, bound, cc, ccVal);
+      clusterWeight[i] += ccVal;
+      localTarget = distGetMaxIndexSort(
+          clmap, selfLoop, localCinfo, remoteCinfo, vDegree[i], ccSize,
+          ccDegree, cc, base, bound, constantForSecondTerm, ccVal);
+    } else {
+      std::unordered_map<GraphElem, GraphWeight> clmap;
+      selfLoop = distBuildLocalMapCounter(e0, e1, clmap, dg, currComm, remoteComm, i, base, bound, cc, ccVal);
+      clusterWeight[i] += ccVal;
+      localTarget = distGetMaxIndex(clmap, selfLoop, localCinfo, remoteCinfo, vDegree[i], ccSize, ccDegree, cc, base, bound, constantForSecondTerm, ccVal);
+    }
   }
   else
     localTarget = cc;
