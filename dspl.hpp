@@ -274,6 +274,134 @@ GraphWeight distBuildLocalMapCounter(const GraphElem e0, const GraphElem e1, std
   return selfLoop;
 } // distBuildLocalMapCounter
 
+// Sort based optimization of `distGetMaxIndex`
+// `clmap` should be a sorted list of [tcomm, tweight]
+GraphElem distGetMaxIndexSort(
+    const std::vector<std::pair<GraphElem, GraphWeight>> &clmap,
+    const GraphWeight selfLoop, const std::vector<Comm> &localCinfo,
+    const std::map<GraphElem, Comm> &remoteCinfo, const GraphWeight vDegree,
+    const GraphElem currSize, const GraphWeight currDegree,
+    const GraphElem currComm, const GraphElem base, const GraphElem bound,
+    const GraphWeight constant, const GraphWeight ccVal) {
+  // do nothing when clmap is empty
+  // there is no other community connected
+  if (clmap.empty())
+    return currComm;
+
+  GraphElem maxIndex = currComm;
+  GraphWeight curGain = 0.0, maxGain = 0.0;
+  GraphWeight eix =
+      static_cast<GraphWeight>(ccVal) - static_cast<GraphWeight>(selfLoop);
+
+  GraphWeight ax = currDegree - vDegree;
+  GraphWeight eiy = 0.0, ay = 0.0;
+
+  GraphElem maxSize = currSize;
+  GraphElem size = 0;
+
+  // after sorting, we can merge weights of
+  // consecutive elements with the same tcomm
+  // here we take the first element
+  auto [tcomm, tweight] = clmap[0];
+
+  // update max index using current tcomm and tweight
+  auto update = [&]() {
+    // is_local, direct access local info
+    if ((tcomm >= base) && (tcomm < bound)) {
+      ay = localCinfo[tcomm - base].degree;
+      size = localCinfo[tcomm - base].size;
+    } else {
+      // is_remote, lookup map
+      std::map<GraphElem, Comm>::const_iterator citer = remoteCinfo.find(tcomm);
+      ay = citer->second.degree;
+      size = citer->second.size;
+    }
+
+    eiy = tweight;
+
+    curGain = 2.0 * (eiy - eix) - 2.0 * vDegree * (ay - ax) * constant;
+
+    if ((curGain > maxGain) ||
+        ((curGain == maxGain) && (curGain != 0.0) && (tcomm < maxIndex))) {
+      maxGain = curGain;
+      maxIndex = tcomm;
+      maxSize = size;
+    }
+  };
+
+  // scan from second element(index=1)
+  for (int i = 1; i < clmap.size(); ++i) {
+    auto [scanningComm, scanningWeight] = clmap[i];
+    // when scanningComm differs from previous one, call update()
+    if (scanningComm != tcomm) {
+      update();
+      tcomm = scanningComm;
+      tweight = scanningWeight;
+    } else {
+      // and sum up weights when tcomm remains unchanged
+      tweight += scanningWeight;
+    }
+  }
+  // handle the remaining elements
+  update();
+
+  if ((maxSize == 1) && (currSize == 1) && (maxIndex > currComm))
+    maxIndex = currComm;
+
+  return maxIndex;
+} // distGetMaxIndexSort
+
+// Sort based optimization of `distBuildLocalMapCounter`
+GraphWeight distBuildLocalMapCounterSort(
+    const GraphElem e0, const GraphElem e1,
+    std::vector<std::pair<GraphElem, GraphWeight>> &clmap, const Graph &g,
+    const std::vector<GraphElem> &currComm,
+    const std::unordered_map<GraphElem, GraphElem> &remoteComm,
+    const GraphElem vertex, const GraphElem base, const GraphElem bound,
+    const GraphElem cc, GraphWeight &ccVal) {
+  GraphWeight selfLoop = 0;
+
+  for (GraphElem j = e0; j < e1; j++) {
+
+    const Edge &edge = g.get_edge(j);
+    const GraphElem &tail_ = edge.tail_;
+    const GraphWeight &weight = edge.weight_;
+    GraphElem tcomm;
+
+    if (tail_ == vertex + base)
+      selfLoop += weight;
+
+    // is_local, direct access local std::vector<GraphElem>
+    if ((tail_ >= base) && (tail_ < bound))
+      tcomm = currComm[tail_ - base];
+    else { // is_remote, lookup map
+      std::unordered_map<GraphElem, GraphElem>::const_iterator iter =
+          remoteComm.find(tail_);
+
+#ifdef DEBUG_PRINTF
+      assert(iter != remoteComm.end());
+#endif
+      tcomm = iter->second;
+    }
+
+    // when tcomm == cc, handle it directly
+    if (tcomm == cc) {
+      ccVal += weight;
+      continue;
+    }
+
+    // we don't dedup elements by tcomm
+    // leave it for sorting
+    clmap.emplace_back(tcomm, weight);
+  }
+
+  // actual sort after constructing `clmap`
+  std::sort(clmap.begin(), clmap.end(),
+            [](const auto &a, const auto &b) { return a.first < b.first; });
+
+  return selfLoop;
+} // distBuildLocalMapCounterSort
+
 void distExecuteLouvainIteration(const GraphElem i, const Graph &dg, const std::vector<GraphElem> &currComm,
 				 std::vector<GraphElem> &targetComm, const std::vector<GraphWeight> &vDegree,
                                  std::vector<Comm> &localCinfo, std::vector<Comm> &localCupdate,
