@@ -56,7 +56,14 @@
 #include <boost/container/vector.hpp>
 
 #if defined(USE_METALL_DSTORE)
+#if __has_include(<metall/utility/metall_mpi_adaptor.hpp>)
+#include <metall/utility/metall_mpi_adaptor.hpp>
+#elif __has_include(<metall_utility/metall_mpi_adaptor.hpp>)
+// Fallbacks to old Metall code structure
 #include <metall_utility/metall_mpi_adaptor.hpp>
+#else
+#error "Cannot find Metall MPI Adaptor's header file."
+#endif
 #endif
 
 namespace {
