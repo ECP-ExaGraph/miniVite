@@ -11,8 +11,8 @@ OPTFLAGS = -O3 -xHost -qopenmp -DPRINT_DIST_STATS #-DPRINT_EXTRA_NEDGES #-DUSE_M
 #-DUSE_MPI_SENDRECV
 #-DUSE_MPI_COLLECTIVES
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
-SNTFLAGS = -std=c++11 -fopenmp -fsanitize=address -O1 -fno-omit-frame-pointer
-CXXFLAGS = -std=c++11 -g $(OPTFLAGS)
+SNTFLAGS = -std=c++17 -fopenmp -fsanitize=address -O1 -fno-omit-frame-pointer
+CXXFLAGS = -std=c++17 -g $(OPTFLAGS)
 
 OBJ = main.o
 TARGET = miniVite
