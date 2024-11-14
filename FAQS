@@ -239,7 +239,7 @@ miniVite?
 ------------------------------------------------------------------------------
 
 A10. First, please download Vite (parent application of miniVite) from: 
-http://hpc.pnl.gov/people/hala/grappolo.html
+https://github.com/ECP-ExaGraph/vite
 
 Graphs/Sparse matrices come in several native formats (matrix market, SNAP, 
 DIMACS, etc.) Vite has several options to convert graphs from native to the 
