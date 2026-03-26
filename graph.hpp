@@ -411,6 +411,121 @@ class BinaryEdgeList
             return g;
         }
 
+        // read a file and return a handle to a sparse array
+        int readGA(int me, int nprocs, int ranks_per_node, std::string file)
+        {
+            int file_open_error;
+            MPI_File fh;
+            MPI_Status status;
+            GraphElem i, j, m, n;
+
+            // specify the number of aggregates
+            MPI_Info info;
+            MPI_Info_create(&info);
+            int naggr = (ranks_per_node > 1) ? (nprocs/ranks_per_node) : ranks_per_node;
+            if (naggr >= nprocs)
+                naggr = 1;
+            std::stringstream tmp_str;
+            tmp_str << naggr;
+            std::string str = tmp_str.str();
+            MPI_Info_set(info, "cb_nodes", str.c_str());
+
+            file_open_error = MPI_File_open(comm_, file.c_str(), MPI_MODE_RDONLY, info, &fh); 
+            MPI_Info_free(&info);
+
+            if (file_open_error != MPI_SUCCESS) 
+            {
+                std::cout << " Error opening file! " << std::endl;
+                MPI_Abort(comm_, -99);
+            }
+
+            // read the dimensions 
+            MPI_File_read_all(fh, &M_, sizeof(GraphElem), MPI_BYTE, &status);
+            MPI_File_read_all(fh, &N_, sizeof(GraphElem), MPI_BYTE, &status);
+            M_local_ = ((M_*(me + 1)) / nprocs) - ((M_*me) / nprocs); 
+
+            // create local graph
+
+            std::vector<GraphElem> edge_indices(M_local_+1);
+
+            // Let N = array length and P = number of processors.
+            // From j = 0 to P-1,
+            // Starting point of array on processor j = floor(N * j / P)
+            // Length of array on processor j = floor(N * (j + 1) / P) - floor(N * j / P)
+
+            uint64_t tot_bytes=(M_local_+1)*sizeof(GraphElem);
+            MPI_Offset offset = 2*sizeof(GraphElem) + ((M_*me) / nprocs)*sizeof(GraphElem);
+
+            // read in INT_MAX increments if total byte size is > INT_MAX
+            
+            if (tot_bytes < INT_MAX)
+                MPI_File_read_at(fh, offset, &edge_indices[0], tot_bytes, MPI_BYTE, &status);
+            else 
+            {
+                int chunk_bytes=INT_MAX;
+                uint8_t *curr_pointer = (uint8_t*) &edge_indices[0];
+                uint64_t transf_bytes = 0;
+
+                while (transf_bytes < tot_bytes)
+                {
+                    MPI_File_read_at(fh, offset, curr_pointer, chunk_bytes, MPI_BYTE, &status);
+                    transf_bytes += chunk_bytes;
+                    offset += chunk_bytes;
+                    curr_pointer += chunk_bytes;
+
+                    if ((tot_bytes - transf_bytes) < INT_MAX)
+                        chunk_bytes = tot_bytes - transf_bytes;
+                } 
+            }    
+
+            N_local_ = edge_indices[M_local_] - edge_indices[0];
+            std::vector<Edge> edge_list(N_local_);
+
+            tot_bytes = N_local_*(sizeof(Edge));
+            offset = 2*sizeof(GraphElem) + (M_+1)*sizeof(GraphElem) + edge_indices[0]*(sizeof(Edge));
+
+            if (tot_bytes < INT_MAX)
+                MPI_File_read_at(fh, offset, &edge_list[0], tot_bytes, MPI_BYTE, &status);
+            else 
+            {
+                int chunk_bytes=INT_MAX;
+                uint8_t *curr_pointer = (uint8_t*)&edge_list[0];
+                uint64_t transf_bytes = 0;
+
+                while (transf_bytes < tot_bytes)
+                {
+                    MPI_File_read_at(fh, offset, curr_pointer, chunk_bytes, MPI_BYTE, &status);
+                    transf_bytes += chunk_bytes;
+                    offset += chunk_bytes;
+                    curr_pointer += chunk_bytes;
+
+                    if ((tot_bytes - transf_bytes) < INT_MAX)
+                        chunk_bytes = (tot_bytes - transf_bytes);
+                } 
+            }    
+
+            MPI_File_close(&fh);
+            // calculate offsets
+            std::vector<GraphElem> partition(M_, 0);
+            MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
+                &partition[0], sizeof(GraphElem), MPI_BYTE, comm_);
+            offset = 0;
+            for (i=0; i<me; i++) offset += partition[i];
+            // Create sparse array
+            int s_a = SPRS_ARRAY_CREATE(M_, M_);
+            for (m=0; m<M_local_; m++) {
+              i = m + offset;
+              GraphElem ncol = edge_indices[m+1]-edge_indices[m];
+              for (n=0; n<ncol; n++) {
+                j = edge_list[n+edge_indices[m]-edge_indices[0]].tail_;
+                GraphWeight w = edge_list[n+edge_indices[m]].weight_;
+                SPRS_ARRAY_ELEMENT(s_a, i, j, w);
+              }
+            }
+            SPRS_ARRAY_ASSEMBLE(s_a);
+            return s_a;
+        }
+
         // find a distribution such that every 
         // process own equal number of edges (serial)
         void find_balanced_num_edges(int nprocs, std::string file, std::vector<GraphElem>& mbins)

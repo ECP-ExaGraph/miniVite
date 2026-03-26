@@ -68,18 +68,29 @@
 #include <random>
 #include <utility>
 #include <cstring>
+#include "ga.h"
 
 #ifdef USE_32_BIT_GRAPH
 using GraphElem = int32_t;
 using GraphWeight = float;
 const MPI_Datatype MPI_GRAPH_TYPE = MPI_INT32_T;
 const MPI_Datatype MPI_WEIGHT_TYPE = MPI_FLOAT;
+#define SPRS_ARRAY_CREATE(_IDIM, _JDIM) \
+  NGA_Sprs_array_create(_IDIM, _JDIM, C_FLOAT)
+#define SPRS_ARRAY_ELEMENT(_HDL, _I, _J, _VAL) \
+  NGA_Sprs_array_add_element(_HDL, _I, _J, &_VAL)
 #else
 using GraphElem = int64_t;
 using GraphWeight = double;
 const MPI_Datatype MPI_GRAPH_TYPE = MPI_INT64_T;
 const MPI_Datatype MPI_WEIGHT_TYPE = MPI_DOUBLE;
+#define SPRS_ARRAY_CREATE(_IDIM, _JDIM) \
+  NGA_Sprs_array_create64(_IDIM, _JDIM, C_DBL)
+#define SPRS_ARRAY_ELEMENT(_HDL, _I, _J, _VAL) \
+  NGA_Sprs_array_add_element64(_HDL, _I, _J, &_VAL)
 #endif
+#define SPRS_ARRAY_ASSEMBLE(_HDL) \
+  NGA_Sprs_array_assemble(_HDL)
 
 extern unsigned seed;
 

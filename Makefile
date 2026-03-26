@@ -1,5 +1,5 @@
 
-CXX = CC
+CXX = mpicxx
 
 USE_TAUPROF=0
 ifeq ($(USE_TAUPROF),1)
@@ -13,6 +13,9 @@ OPTFLAGS = -O3 -fopenmp -DPRINT_DIST_STATS #-DPRINT_EXTRA_NEDGES #-DUSE_MPI_RMA 
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
 SNTFLAGS = -std=c++11 -fopenmp -fsanitize=address -O1 -fno-omit-frame-pointer
 CXXFLAGS = -std=c++11 -g $(OPTFLAGS)
+GA_ROOT = /qfs/people/d3g293/tmp/ga-sparse/build_rma_dcptn
+GA_INC = $(GA_ROOT)/include
+GA_LIB = $(GA_ROOT)/lib
 
 OBJ = main.o
 TARGET = miniVite
@@ -20,10 +23,10 @@ TARGET = miniVite
 all: $(TARGET)
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c -o $@ $^
+	$(CXX) $(CXXFLAGS) -I$(GA_INC) -c -o $@ $^
 
 $(TARGET):  $(OBJ)
-	$(CXX) $^ $(OPTFLAGS) -o $@
+	$(CXX) $^ $(OPTFLAGS) -L$(GA_LIB) -lga -larmci -lm -o $@
 
 .PHONY: clean
 
